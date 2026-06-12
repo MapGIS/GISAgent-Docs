@@ -1,18 +1,38 @@
 ---
-title: "介绍"
-description: "GisAgent 文档站首页"
+title: 文档中心
 ---
 
-`GisAgent` 是当前工作区面向 GIS 场景的入口与协作体系文档站。这里整理了系统架构、组件边界、运行链路以及当前约束，便于后续持续扩展产品、运行时与运维文档。
+<script>{`(function(){function apply(){var footer=document.getElementById('footer');if(footer){footer.querySelectorAll('*').forEach(function(el){var text=(el.textContent||'').replace(/\s+/g,' ').trim();if(!text)return;if(text==='Powered by Mintlify'||text.indexOf('Powered by Mintlify')!==-1){el.textContent='Powered by GIS Agent';}else if(text==='Mintlify'){var parentText=(el.parentElement&&el.parentElement.textContent||'').replace(/\s+/g,' ').trim();if(parentText.indexOf('Powered by Mintlify')!==-1){el.textContent='GIS Agent';}}});}var meta=document.querySelector('meta[name="generator"]');if(meta){meta.setAttribute('content','GIS Agent');}}apply();new MutationObserver(apply).observe(document.documentElement,{childList:true,subtree:true});})();`}</script>
 
-<Card title="快速开始" icon="rocket" href="/quickstart">
-  查看本地启动方式，并了解如何继续扩展 Mintlify 文档工程。
-</Card>
+# MapGIS Agent 文档中心
 
-<Card title="系统总览" icon="diagram-project" href="/system-overview">
-  浏览当前工作区内 `gisagent`、`opencode`、`xcsmartdatabase` 与 `pg_tileserv` 的边界关系。
-</Card>
+MapGIS Agent 是面向地理空间场景的智能应用生产系统。当前文档站聚合了产品介绍、上手材料、常见问题、使用技巧以及产品协议，便于统一查阅与分发。
 
-<Tip>
-  当前站点使用 Mintlify 最新的 `docs.json` 工程格式，支持多 Tab 导航、MDX 页面与静态资源配置。
-</Tip>
+## 快速入口
+
+- [产品文档](docs/product-overview)
+- [快速开始](quickstart)
+- [常见问题 FAQ](docs/faq)
+- [使用技巧](docs/usage-tips)
+
+## 文档结构
+
+### 产品介绍
+
+适合首次了解 MapGIS Agent 的读者，重点说明产品定位、核心价值、典型场景和使用方式。
+
+- [产品文档](docs/product-overview)
+- [快速开始](quickstart)
+- [常见问题 FAQ](docs/faq)
+- [使用技巧](docs/usage-tips)
+
+### 产品协议
+
+适合上线前审阅、对外发布或内部合规使用场景。
+
+- [产品规则](docs/product-rules)
+- [隐私政策](docs/privacy-policy)
+
+## 使用建议
+
+如果你准备对外展示这套文档，建议优先从首页、产品文档和快速开始开始阅读，再按需查看 FAQ、使用技巧和协议页面。

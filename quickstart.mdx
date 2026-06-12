@@ -1,52 +1,61 @@
 ---
-title: "快速开始"
-description: "运行并扩展本地 GisAgent Mintlify 文档站"
+title: 快速开始
 ---
 
-当你希望为 `GisAgent` 维护一个文档型站点时，可以直接使用当前这个工程。
+<script>{`(function(){function apply(){var footer=document.getElementById('footer');if(footer){footer.querySelectorAll('*').forEach(function(el){var text=(el.textContent||'').replace(/\s+/g,' ').trim();if(!text)return;if(text==='Powered by Mintlify'||text.indexOf('Powered by Mintlify')!==-1){el.textContent='Powered by GIS Agent';}else if(text==='Mintlify'){var parentText=(el.parentElement&&el.parentElement.textContent||'').replace(/\s+/g,' ').trim();if(parentText.indexOf('Powered by Mintlify')!==-1){el.textContent='GIS Agent';}}});}var meta=document.querySelector('meta[name="generator"]');if(meta){meta.setAttribute('content','GIS Agent');}}apply();new MutationObserver(apply).observe(document.documentElement,{childList:true,subtree:true});})();`}</script>
 
-## 前置要求
+# 快速开始
 
-- Node.js 20.17 或更高版本
-- shell 中可用 `npm`
+阅读时间：约 5 分钟
 
-## 本地预览
+本指南将带你从零开始，在 5 分钟内完成基于 MapGIS Agent 的全时空应用构建、预览与部署。
 
-<Steps>
-  <Step title="安装 Mint CLI">
-    使用最新版本的 Mint CLI。
+前提条件：只需一个已注册的 MapGIS Cloud 账号，以及一个你想要实现的想法。
 
-    ```bash
-    npm i -g mint
-    ```
-  </Step>
+## 步骤一：用自然语言描述需求
 
-  <Step title="启动文档站">
-    在 `doc/` 目录下启动本地预览。
+在 MapGIS Agent 的工作台对话框中，用日常语言清晰描述你的需求。
 
-    ```bash
-    cd /home/maptex/Code/xcsmartdatabase/doc
-    mint dev
-    ```
-  </Step>
+![](/docs/quickstart-assets/1.webp)
 
-  <Step title="新增页面">
-    在当前目录创建新的 `.mdx` 页面，并在 `docs.json` 里注册到对应 tab 或 group。
+需求输入后，按回车或点击“开始会话”即可启动项目。
 
-    ```bash
-    mint rename quickstart.mdx getting-started.mdx
-    ```
-  </Step>
-</Steps>
+你还可以通过以下方式快速发起需求：
 
-## 工程结构
+1. 通过工具箱，从首页应用案例库中复制提示词。
+2. 通过社区，在优秀应用中点击“做同款”快速复用设计思路。
+3. 直接向 Agent 提问“你有什么技能？”，查看当前可用能力模块。
 
-- `docs.json`：站点配置
-- `index.mdx`：首页
-- `quickstart.mdx`：本地启动说明
-- `system-overview.mdx`：系统总览
-- `logo/` 与 `favicon.svg`：品牌资源
+## 步骤二：实时生成与预览
 
-<Tip>
-  如果 CLI 有异常，优先执行 `mint update`，然后在当前目录里再运行 `mint validate`。
-</Tip>
+MapGIS Agent 在接收到需求后，会自动分析并规划开发步骤，逐步生成应用的前后端代码。代码生成完成后，系统会自动构建并启动服务，提供可视化预览界面。
+
+在此阶段，你可以：
+
+- 全面预览应用，检查功能和布局是否符合预期。
+- 实时反馈调整，直接在对话框中提出修改意见，由 Agent 动态调整代码。
+
+![](/docs/quickstart-assets/2.webp)
+
+## 步骤三：一键发布与分享
+
+对预览结果满意后，点击页面右上角的“分享”按钮。
+
+![](/docs/quickstart-assets/3.webp)
+
+应用将自动部署上线。部署成功后，你可以：
+
+1. 复制访问链接，分享给他人使用。
+2. 将应用发布到社区，供其他用户访问、点赞或通过“做同款”快速复刻。
+
+![](/docs/quickstart-assets/4.webp)
+
+## 下一步
+
+完成首个分析或应用后，可以继续阅读以下内容：
+
+- [产品文档](docs/product-overview)
+- [常见问题 FAQ](docs/faq)
+- [使用技巧](docs/usage-tips)
+- [产品规则](docs/product-rules)
+- [隐私政策](docs/privacy-policy)

@@ -28,3 +28,6 @@ Thumbs.db
 *.log
 *.tmp
 *.bak
+.codex-home/
+.tmp/
+docs/quickstart-guide.zip
