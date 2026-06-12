@@ -1,0 +1,94 @@
+---
+title: "组件角色"
+description: "工作区各工程的职责与边界"
+---
+
+本文总结 `/home/maptex/Code/xcsmartdatabase/` 下各工程在当前系统中的角色划分。
+
+<Warning>
+  `bakup/` 不属于当前架构定义范围。
+</Warning>
+
+## 四层结构
+
+1. 入口与会话层：`gisagent`
+2. 通用 AI agent / 技能编排层：`opencode`
+3. 地理空间数据与瓦片服务层：`pg_tileserv`
+4. GIS 业务能力层：`xcsmartdatabase`
+
+## 职责分工
+
+| 工程 | 主要角色 | 负责什么 | 不负责什么 |
+| --- | --- | --- | --- |
+| `gisagent/` | 多 agent 入口层 | 会话入口、agent 选择、preset 管理、ACP 路由 | GIS 业务执行、瓦片发布 |
+| `opencode/` | 通用 AI 编排层 | ACP 会话维护、技能发现、工具编排、结果组织 | 长期承载 `xcsmartdatabase` 业务运行时 |
+| `pg_tileserv/` | 瓦片发布层 | 从 PostGIS 发布矢量或栅格结果 | AI 编排、重型任务流执行 |
+| `xcsmartdatabase/` | 业务能力层 | GIS 核心逻辑、CLI、数据处理、后端代码、技能素材 | 与单一 agent 镜像强绑定 |
+
+## `gisagent`
+
+`gisagent` 当前更像 **agent gateway**，不是 GIS 引擎。
+
+它应该：
+
+- 提供统一入口
+- 管理不同 preset
+- 将会话路由到具体 ACP agent
+- 支持多个 agent 实现
+
+它不应该：
+
+- 直接执行 GDAL、Python、PostgreSQL 业务命令
+- 直接处理地图数据
+- 负责瓦片生成
+- 维护业务脚本本体
+
+## `opencode`
+
+`opencode` 是通用 AI coding / ACP 编排层。
+
+它当前负责：
+
+- 启动和维护 ACP 会话
+- 发现和加载 skills
+- 连接 MCP tools
+- 组织模型推理与工具执行
+
+已经确认的长期方向是：
+
+- 保持轻量和通用
+- 保留 skill docs 与编排逻辑
+- 通过本地或 sidecar adapter 调用独立运行时
+- 不再直接承载重型业务运行时
+
+## `pg_tileserv`
+
+`pg_tileserv` 是 PostGIS 前面的瓦片发布层。
+
+它适合：
+
+- 发布矢量瓦片
+- 发布 PostGIS Raster 结果
+- 暴露空间表与函数
+
+它不适合：
+
+- 承担复杂 AI 工作流
+- 做技能编排
+- 执行重型数据导入
+- 管理多 agent 会话
+
+## `xcsmartdatabase`
+
+`xcsmartdatabase` 是 GIS 业务能力的源头。
+
+它包含：
+
+- GIS 核心库
+- 渲染与数据处理逻辑
+- CLI 工具链
+- 导入导出脚本
+- 服务端代码
+- skill 实现素材
+
+它的长期方向是继续保留能力源头定位，但从 `opencode` 镜像职责中解耦，并通过更稳定的 runtime 或 adapter 边界对外暴露。

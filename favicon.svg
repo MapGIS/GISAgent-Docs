@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" role="img" aria-label="GisAgent">
+  <circle cx="12" cy="12" r="11" fill="url(#logo-grad-favicon)"/>
+  <ellipse cx="12" cy="12" rx="4.5" ry="11" fill="none" stroke="#fff" stroke-width="1.2" opacity="0.8"/>
+  <line x1="1" y1="12" x2="23" y2="12" stroke="#fff" stroke-width="1.2" opacity="0.8"/>
+  <ellipse cx="12" cy="8" rx="9" ry="3" fill="none" stroke="#fff" stroke-width="0.8" opacity="0.5"/>
+  <ellipse cx="12" cy="16" rx="9" ry="3" fill="none" stroke="#fff" stroke-width="0.8" opacity="0.5"/>
+  <defs>
+    <linearGradient id="logo-grad-favicon" x1="0" y1="0" x2="24" y2="24">
+      <stop stop-color="#2979ff"/>
+      <stop offset="1" stop-color="#00b0ff"/>
+    </linearGradient>
+  </defs>
+</svg>

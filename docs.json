@@ -1,0 +1,70 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "GisAgent",
+  "colors": {
+    "primary": "#2979ff",
+    "light": "#5aa0ff",
+    "dark": "#1565c0"
+  },
+  "favicon": "/favicon.svg",
+  "logo": {
+    "light": "/logo/light.svg",
+    "dark": "/logo/dark.svg"
+  },
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "开始使用",
+        "groups": [
+          {
+            "group": "入门",
+            "pages": [
+              "index",
+              "quickstart"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "架构设计",
+        "groups": [
+          {
+            "group": "系统架构",
+            "pages": [
+              "system-overview",
+              "component-roles",
+              "runtime-flow",
+              "constraints-and-direction"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "navbar": {
+    "links": [
+      {
+        "label": "工作区",
+        "href": "https://github.com/"
+      }
+    ]
+  },
+  "contextual": {
+    "options": [
+      "copy",
+      "view",
+      "chatgpt",
+      "claude",
+      "perplexity",
+      "mcp",
+      "cursor",
+      "vscode"
+    ]
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/"
+    }
+  }
+}

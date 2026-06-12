@@ -1,0 +1,62 @@
+---
+title: "约束与方向"
+description: "当前关键约束与已确认的长期架构方向"
+---
+
+## 当前关键约束
+
+后续 AI 与工程改动需要继续遵守这些事实：
+
+1. 不要再把这些已迁移 GIS 技能当作 `opencode` 容器内本地 CLI 技能处理：
+   - `postgis-import-data`
+   - `tileserv-reload-catalog`
+   - `maplibre-viewer`
+2. 不要为了这几个技能把 GDAL、`psql`、Node 或整套 `xcsmartdatabase` 源码重新塞回 clean `opencode` 镜像
+3. 不要再把 `xcsmartdatabase-service` 当作当前有效执行位置或 MCP 入口
+4. `opencode` 侧的 skill 现在主要是提示词、约束和编排定义，不再是运行时承载者
+5. 后续重运行时 GIS 技能应继续走当前有效工具链，而不是恢复旧的 remote MCP 路径
+6. 上传文件与 HTML 输出依赖共享 `/workspace`，不能假设仅存在于单容器本地路径
+7. `tileserv-reload-catalog` 默认应返回公网 `TILESERV_URL`，内部地址只作为内部字段保留
+
+## 已迁移 GIS 技能方向
+
+首批稳定工具入口是：
+
+- `xc_postgis_import_data`
+- `xc_tileserv_reload_catalog`
+- `xc_maplibre_viewer`
+
+相关 `SKILL.md` 应优先调用这些统一工具入口，而不是继续依赖历史上的 `xcsmartdatabase-service`。
+
+## 推荐的长期关系
+
+长期方向应收敛为：
+
+```text
+用户
+  -> gisagent
+  -> opencode 或其他 ACP agents
+  -> skill pack + adapter
+  -> xcsmartdatabase service
+  -> PostgreSQL / PostGIS
+  -> pg_tileserv
+  -> 地图 / 预览 / 网站
+```
+
+这意味着：
+
+- `gisagent` 保持入口层
+- `opencode` 保持通用 agent 层
+- `xcsmartdatabase` 演进为独立业务服务与远程执行层
+- `pg_tileserv` 继续保持 PostGIS 瓦片发布器角色
+
+## 简短结论
+
+如果只记一件事，可以记这个：
+
+- `gisagent` 是入口和路由
+- `opencode` 是通用 agent 和技能编排器
+- `xcsmartdatabase` 是 GIS 业务能力核心
+- `pg_tileserv` 是 PostGIS 瓦片发布器
+
+当前核心重构方向是让 `xcsmartdatabase` 不再以内置方式耦合在 `opencode` 镜像里，而是收敛为独立业务服务，由 `opencode` 和其他 agent 通过稳定 adapter 统一调用。

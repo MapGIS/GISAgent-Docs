@@ -1,0 +1,52 @@
+---
+title: "快速开始"
+description: "运行并扩展本地 GisAgent Mintlify 文档站"
+---
+
+当你希望为 `GisAgent` 维护一个文档型站点时，可以直接使用当前这个工程。
+
+## 前置要求
+
+- Node.js 20.17 或更高版本
+- shell 中可用 `npm`
+
+## 本地预览
+
+<Steps>
+  <Step title="安装 Mint CLI">
+    使用最新版本的 Mint CLI。
+
+    ```bash
+    npm i -g mint
+    ```
+  </Step>
+
+  <Step title="启动文档站">
+    在 `doc/` 目录下启动本地预览。
+
+    ```bash
+    cd /home/maptex/Code/xcsmartdatabase/doc
+    mint dev
+    ```
+  </Step>
+
+  <Step title="新增页面">
+    在当前目录创建新的 `.mdx` 页面，并在 `docs.json` 里注册到对应 tab 或 group。
+
+    ```bash
+    mint rename quickstart.mdx getting-started.mdx
+    ```
+  </Step>
+</Steps>
+
+## 工程结构
+
+- `docs.json`：站点配置
+- `index.mdx`：首页
+- `quickstart.mdx`：本地启动说明
+- `system-overview.mdx`：系统总览
+- `logo/` 与 `favicon.svg`：品牌资源
+
+<Tip>
+  如果 CLI 有异常，优先执行 `mint update`，然后在当前目录里再运行 `mint validate`。
+</Tip>

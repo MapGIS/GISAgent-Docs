@@ -1,0 +1,37 @@
+---
+title: "系统总览"
+description: "当前工作区的分层结构与核心边界"
+---
+
+本文总结 `/home/maptex/Code/xcsmartdatabase/` 下各工程在整个系统中的分工。
+
+## 一句话总览
+
+这套系统可以理解为 4 层：
+
+1. **入口与会话层**：`gisagent`
+2. **通用 AI agent / 技能编排层**：`opencode`
+3. **地理空间数据与瓦片服务层**：`pg_tileserv`
+4. **业务能力与 GIS 工具层**：`xcsmartdatabase`
+
+## 总览链路
+
+```text
+用户
+  -> gisagent
+  -> opencode
+  -> xcsmartdatabase
+  -> PostgreSQL / PostGIS
+  -> pg_tileserv
+  -> 地图 / 预览 / 网站
+```
+
+## 继续阅读
+
+- [组件角色](/component-roles)
+- [运行链路](/runtime-flow)
+- [约束与方向](/constraints-and-direction)
+
+<Tip>
+  `bakup/` 不纳入当前架构说明。
+</Tip>

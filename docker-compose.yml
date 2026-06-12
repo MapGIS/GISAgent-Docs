@@ -1,0 +1,27 @@
+# gisagent-docs 文档站独立部署
+# 端口: 17077
+# 镜像: gisagent-docs:latest
+
+services:
+  doc-site:
+    image: gisagent-docs:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gisagent-doc-site
+    restart: unless-stopped
+    ports:
+      - "17077:3000"
+    networks:
+      - gisagent-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:3000/ >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+networks:
+  gisagent-network:
+    external: true
+    name: gisagent-network

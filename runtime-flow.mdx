@@ -1,0 +1,48 @@
+---
+title: "运行链路"
+description: "当前系统中请求与 GIS 执行链路的流转方式"
+---
+
+## 当前系统关系
+
+当前系统大致这样工作：
+
+1. 用户先进入 `gisagent`
+2. `gisagent` 选择某个 agent preset
+3. preset 把请求转给 `opencode`、`claude`、`qwen-code`、`qoder` 等 agent
+4. 具体 agent 根据自己的技能发现机制决定调用顺序
+5. GIS 技能调用当前有效的本地或 sidecar 工具链，而不是旧的 `xcsmartdatabase-service`
+6. 工具链通过 `xcsmartdatabase` 相关运行时执行 Node、GDAL、PostGIS 脚本
+7. 空间相关结果可能写入 PostgreSQL / PostGIS
+8. `pg_tileserv` 将这些结果发布成 tiles 或 catalog
+9. `maplibre-viewer` 等产物写回共享 `/workspace`
+
+## 简化链路
+
+```text
+用户
+  -> gisagent
+  -> agent preset
+  -> opencode 或其他 ACP agent
+  -> 本地 / sidecar tool runtime
+  -> xcsmartdatabase toolchain
+  -> PostgreSQL / PostGIS
+  -> pg_tileserv
+  -> 地图 / 预览 / 网站
+```
+
+## `agent-qoder` 当前认知
+
+`agent-qoder` 与 `claude` / `qwen-code` 在技能发现机制上不同：
+
+- `qodercli --acp` 不会仅凭 `/workspace/skills` 自动发现 `skillpacks`
+- 当前有效方式是在 runtime 启动时把 `skillpacks` 增量平铺到 `~/.qoder/skills`
+- 这是保留原有 `.qoder` 内容基础上的追加，不是覆盖
+- 因为 ACP 协议走 `stdout`，启动日志必须输出到 `stderr`
+
+## 最重要的边界
+
+- `gisagent` 决定谁来处理任务
+- `opencode` 决定如何编排执行
+- `xcsmartdatabase` 负责实际 GIS 业务执行
+- `pg_tileserv` 负责把空间结果发布成瓦片
