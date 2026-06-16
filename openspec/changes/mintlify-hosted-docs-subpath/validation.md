@@ -204,23 +204,94 @@
 - `https://gisagent.smaryun.com/mintlify-assets/...` 可访问
 - 浏览器中此前的 `ERR_CONNECTION_REFUSED` 已具备被消除的服务端条件
 
+### L. deploy 目录与阿里云运行态一致性复核
+
+已再次逐项比对：
+
+- 本地 `deploy/nginx-20260602_164043/nginx/gisagent.conf`
+- 远端 `/opt/nginx/nginx-20260602_164043/nginx/gisagent.conf`
+- 本地 `deploy/nginx-20260602_164043/docker-compose.yml`
+- 远端 `/opt/nginx/nginx-20260602_164043/docker-compose.yml`
+
+复核结果：
+
+- 文件内容一致
+- 本地 deploy 已同步当前阿里云有效配置
+
+### M. 取消 HTML `sub_filter` 后验证
+
+为避免错误改写 `/docs/docs/...`，已移除 `/docs` 代理中的 HTML `sub_filter` 规则。
+
+移除后再次抓取：
+
+- `https://gisagent.smaryun.com/docs/product-overview`
+
+页面中的绝对根路径链接仍可见：
+
+- `href="/"`
+- `href="/quickstart"`
+- `href="/mintlify-assets/..."`
+
+同时也存在：
+
+- `href="/docs/product-overview"`
+- `href="/docs/faq"`
+- `href="/docs/usage-tips"`
+
+这验证了：
+
+- 代理层已不再额外改写 HTML
+- 当前页面中的混合路径直接来自 Mintlify 输出
+
+### N. 深链接 404 复核
+
+再次验证：
+
+- `curl -I -L https://mapgis.mintlify.app/docs/quickstart`
+  返回 `404`
+- `curl -I -L https://gisagent.smaryun.com/docs/quickstart`
+  也返回 `404`
+
+对照验证：
+
+- `curl -I -L https://mapgis.mintlify.app/docs/product-overview`
+  返回 `200`
+- `curl -I -L https://gisagent.smaryun.com/docs/product-overview`
+  返回 `200`
+
+因此可确认：
+
+- `/docs/quickstart` 的问题在 Mintlify 上游就已存在
+- 阿里云 Nginx 只是透传该结果
+- 这不是本地 deploy 或公网反代新增引入的问题
+
+### O. 源码层路径修正后的 CLI 验证
+
+在将根目录页面迁移到 `docs/` 目录并统一页面 ID、正文链接后，再次使用 Mintlify CLI 验证：
+
+- `npx mintlify@latest validate`
+  返回 `success build validation passed`
+- `npx mintlify@latest broken-links`
+  返回 `success no broken links found`
+
+这说明当前仓库层面已满足：
+
+- 站内链接定义一致
+- Mintlify 构建可通过
+- 已无 CLI 可识别的坏链
+
 ## 当前未完成
 
-### 1. Dashboard 域名验证
+### 1. Mintlify 路由产物一致性
 
-尚未完成 `gisagent.smaryun.com` 的域名验证。
+当前仍未完成：
 
-### 2. 深链接与静态资源验证
+- 将所有导航链接稳定生成到 `/docs/...`
+- 让 `quickstart` 等页面在 `/docs/...` 下返回 `200`
 
-尚未验证：
+### 2. 功能验证
 
-- `http://gisagent.smaryun.com/docs/_next/...`
-- `http://gisagent.smaryun.com/docs/quickstart`
-- 浏览器刷新深链接是否稳定
-
-### 3. 功能验证
-
-尚未验证：
+在页面路由完全稳定前，以下能力仍不建议做最终验收：
 
 - 全文搜索
 - Assistant

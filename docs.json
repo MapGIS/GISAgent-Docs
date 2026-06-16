@@ -20,21 +20,21 @@
           {
             "group": "首页",
             "pages": [
-              "index"
+              "docs/index"
             ]
           },
           {
             "group": "产品介绍",
             "pages": [
-              "product-overview",
-              "quickstart"
+              "docs/product-overview",
+              "docs/quickstart"
             ]
           },
           {
             "group": "常见问题",
             "pages": [
-              "faq",
-              "usage-tips"
+              "docs/faq",
+              "docs/usage-tips"
             ]
           }
         ]
@@ -45,8 +45,8 @@
           {
             "group": "协议与规则",
             "pages": [
-              "product-rules",
-              "privacy-policy"
+              "docs/product-rules",
+              "docs/privacy-policy"
             ]
           }
         ]

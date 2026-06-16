@@ -259,7 +259,129 @@
 - `http://gisagent.smaryun.com/...` 已修复可用
 - `https://gisagent.smaryun.com/...` 仍不可用，原因是当前未配置 TLS 监听与证书
 
-### 16. HTTPS 证书与 443 监听落地
+### 16. HTTPS 落地与静态资源恢复
+
+后续已在阿里云完成：
+
+- `certbot` 安装
+- `gisagent.smaryun.com` 证书签发
+- `docker-compose.yml` 暴露 `443:443`
+- 挂载 `/etc/letsencrypt`
+- Nginx 增加 `listen 443 ssl http2`
+- 配置 `ssl_certificate` 与 `ssl_certificate_key`
+
+完成后验证：
+
+- `https://gisagent.smaryun.com/` 可访问主应用
+- `https://gisagent.smaryun.com/docs` 可访问 Mintlify 文档
+- `https://gisagent.smaryun.com/mintlify-assets/...` 可正常返回 CSS / JS / favicon
+
+因此此前浏览器中的：
+
+- `ERR_CONNECTION_REFUSED`
+
+已确认是阿里云未监听 `443` 所致，而不是 `/mintlify-assets` 路由本身的问题。
+
+### 17. 去除 HTML 路径重写
+
+为适配 `/docs` 子路径，曾临时在 Nginx `/docs` 代理中加入 HTML `sub_filter`，试图将 Mintlify 输出的根路径链接统一改写为 `/docs/...`。
+
+后续在实际页面中发现该策略会把部分已经正确带 `/docs/` 的链接再次重写，出现：
+
+- `/docs/docs/product-rules`
+
+这说明：
+
+- Mintlify 当前输出并非全量根路径
+- 页面中同时存在根路径链接与 `/docs/...` 链接
+- 在代理层做统一字符串替换会破坏已经正确的链接
+
+因此本轮已将所有 `sub_filter` 相关改写从 `deploy/nginx-20260602_164043/nginx/gisagent.conf` 中移除，并同步到阿里云运行环境。
+
+### 18. 本地 deploy 与阿里云运行态再次对齐
+
+已再次核对：
+
+- `/home/maptex/Code/xcsmartdatabase/doc/deploy/nginx-20260602_164043/nginx/gisagent.conf`
+- `/opt/nginx/nginx-20260602_164043/nginx/gisagent.conf`
+- `/home/maptex/Code/xcsmartdatabase/doc/deploy/nginx-20260602_164043/docker-compose.yml`
+- `/opt/nginx/nginx-20260602_164043/docker-compose.yml`
+
+当前两端内容一致，且保留以下关键运行态特征：
+
+- `/` -> `mapgis-ai-gisagent:3000`
+- `/docs` -> `https://mapgis.mintlify.app`
+- `/mintlify-assets/*` 单独反代到 Mintlify
+- `443` 已监听
+- 宿主机配置通过 volume 挂载进入容器
+
+### 19. 剩余问题定位到 Mintlify 产物
+
+在用户将 Mintlify Dashboard 的自定义域与 `Host at /docs` 打开后，再次检查上游与公网：
+
+- `https://mapgis.mintlify.app/docs` 会跳转到 `/docs/product-overview`
+- `https://mapgis.mintlify.app/docs/product-overview` 返回 `200`
+- `https://mapgis.mintlify.app/docs/quickstart` 返回 `404`
+- `https://gisagent.smaryun.com/docs/quickstart` 同样返回 `404`
+
+同时从：
+
+- `https://gisagent.smaryun.com/docs/product-overview`
+
+抓取页面 HTML，可见 Mintlify 仍输出混合链接：
+
+- `href="/"`
+- `href="/quickstart"`
+- `href="/docs/product-overview"`
+- `href="/docs/faq"`
+- `href="/docs/usage-tips"`
+
+因此当前结论更新为：
+
+- Nginx 代理链路已打通
+- 本地 deploy 模板已同步阿里云运行态
+- 当前剩余的导航与深链接不一致，来源于 Mintlify 站点生成结果本身
+- 不应再通过 Nginx `sub_filter` 继续做 HTML 层修补
+
+### 19A. 文档源码层路径统一修正
+
+在进一步回看仓库结构后，确认还有两份页面仍位于仓库根目录：
+
+- `index.mdx`
+- `quickstart.mdx`
+
+而其他正式文档页位于：
+
+- `docs/*.mdx`
+
+这会导致 Mintlify 生成混合站内路径：
+
+- 根目录页面生成 `/`
+- 根目录页面生成 `/quickstart`
+- `docs/` 目录页面生成 `/docs/product-overview`
+
+因此本轮在源码层执行以下修正：
+
+1. 将 `index.mdx` 移动为 `docs/index.mdx`
+2. 将 `quickstart.mdx` 移动为 `docs/quickstart.mdx`
+3. 将 `docs.json` 中对应页面 ID 统一改为：
+   - `docs/index`
+   - `docs/quickstart`
+   - `docs/product-overview`
+   - `docs/faq`
+   - `docs/usage-tips`
+   - `docs/product-rules`
+   - `docs/privacy-policy`
+4. 将正文中的站内手写链接统一改为 `/docs/...`
+5. 将快速开始页图片路径统一改为 `/docs/quickstart-assets/...`
+6. 顺带移除隐私政策中的失效链接 `/guides/file`
+
+本轮修正目标是：
+
+- 让 Mintlify 从内容源头只生成 `/docs/...` 站内路径
+- 不再依赖代理层字符串替换修复导航
+
+### 20. HTTPS 证书与 443 监听落地
 
 随后已在阿里云主机执行：
 
