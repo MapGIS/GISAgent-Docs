@@ -1,20 +1,19 @@
----
+﻿---
 title: 使用技巧
 ---
 
-<script>{`(function(){function apply(){var footer=document.getElementById('footer');if(footer){footer.querySelectorAll('*').forEach(function(el){var text=(el.textContent||'').replace(/\s+/g,' ').trim();if(!text)return;if(text==='Powered by Mintlify'||text.indexOf('Powered by Mintlify')!==-1){el.textContent='Powered by GIS Agent';}else if(text==='Mintlify'){var parentText=(el.parentElement&&el.parentElement.textContent||'').replace(/\s+/g,' ').trim();if(parentText.indexOf('Powered by Mintlify')!==-1){el.textContent='GIS Agent';}}});}var meta=document.querySelector('meta[name="generator"]');if(meta){meta.setAttribute('content','GIS Agent');}}apply();new MutationObserver(apply).observe(document.documentElement,{childList:true,subtree:true});})();`}</script>
 
-# MapGIS Agent 使用技巧
+# 高效使用建议
 
-本文面向实际使用场景，总结更适合 MapGIS Agent 的提示词结构、数据源选择和问题排查方法。
+本文面向实际使用场景，总结更适合 GIS Agent 的提示词结构、数据源选择和问题排查方法。
 
-本文提供 MapGIS Agent 高效使用的核心策略，旨在帮助用户掌握结构化提示词撰写与数据源择优原则，以实现精准、高效的 GIS 工作流自动化。
+本文提供 GIS Agent 高效使用的核心策略，旨在帮助用户掌握结构化提示词撰写与数据源择优原则，以实现精准、高效的 GIS 工作流自动化。
 
 ***
 
 ## 一、精准指令：提示词的三种高效模式
 
-与 MapGIS Agent 协作，核心在于通过结构化指令降低歧义。我们推荐以下三种清晰、务实的提示词使用模式。
+与 GIS Agent 协作，核心在于通过结构化指令降低歧义。我们推荐以下三种清晰、务实的提示词使用模式。
 
 ### 1.1 需求描述模板：数据源 + 操作 + 输出
 

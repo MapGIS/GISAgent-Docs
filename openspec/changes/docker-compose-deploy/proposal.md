@@ -2,7 +2,7 @@
 
 ## 背景
 
-当前 `doc/` 下的 `GisAgent` 文档站已经可本地运行，且 `server.maptex.top/doc/` 的本机访问链路已经打通。
+当前 `doc/` 下的 `GIS Agent` 文档站已经可本地运行，且 `server.maptex.top/doc/` 的本机访问链路已经打通。
 
 但当前有效方式仍然是：
 

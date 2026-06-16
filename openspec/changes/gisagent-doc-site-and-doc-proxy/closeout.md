@@ -1,4 +1,4 @@
-# Closeout 状态：GisAgent 文档站与 `/doc` 本机代理
+# Closeout 状态：GIS Agent 文档站与 `/doc` 本机代理
 
 ## 当前状态
 

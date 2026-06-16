@@ -1,13 +1,13 @@
 ---
 name: "gisagent-doc-site-and-doc-proxy"
-description: "`doc/` 下 GisAgent Mintlify 文档站建设与 `/doc` 本机代理接入记录"
+description: "`doc/` 下 GIS Agent Mintlify 文档站建设与 `/doc` 本机代理接入记录"
 metadata:
   type: project
 status: in_progress
 updated: 2026-06-12
 ---
 
-# GisAgent 文档站与 `/doc` 代理状态
+# GIS Agent 文档站与 `/doc` 代理状态
 
 ## 当前结论
 
@@ -16,7 +16,7 @@ updated: 2026-06-12
 ## 已完成
 
 - `doc/` 下创建 Mintlify 文档工程
-- 站点标题改为 `GisAgent`
+- 站点标题改为 `GIS Agent`
 - 页面中文化
 - 导航改为多 Tab
 - logo、favicon、主色调统一为蓝色系

@@ -1,7 +1,7 @@
 {
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
-  "name": "MapGIS Agent",
+  "name": "GIS Agent",
   "colors": {
     "primary": "#2979ff",
     "light": "#5aa0ff",
@@ -13,24 +13,37 @@
     "dark": "/logo/dark.svg"
   },
   "navigation": {
-    "groups": [
+    "tabs": [
       {
-        "group": "开始使用",
-        "root": "index",
-        "pages": [
+        "tab": "文档中心",
+        "groups": [
           {
-            "group": "产品介绍",
-            "expanded": false,
+            "group": "首页",
             "pages": [
-              "docs/product-overview",
-              "quickstart",
-              "docs/faq",
-              "docs/usage-tips"
+              "index"
             ]
           },
           {
-            "group": "产品协议",
-            "expanded": false,
+            "group": "产品介绍",
+            "pages": [
+              "docs/product-overview",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "常见问题",
+            "pages": [
+              "docs/faq",
+              "docs/usage-tips"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "产品协议",
+        "groups": [
+          {
+            "group": "协议与规则",
             "pages": [
               "docs/product-rules",
               "docs/privacy-policy"

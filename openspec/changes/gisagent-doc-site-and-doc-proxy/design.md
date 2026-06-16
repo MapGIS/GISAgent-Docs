@@ -1,10 +1,10 @@
-# 设计：GisAgent 文档站与 `/doc` 本机代理链路
+# 设计：GIS Agent 文档站与 `/doc` 本机代理链路
 
 ## 摘要
 
 本设计将此次工作拆成两条主线：
 
-1. **文档站主线**：使用最新 Mintlify `docs.json` 工程结构，在 `doc/` 下创建可维护的 `GisAgent` 文档站
+1. **文档站主线**：使用最新 Mintlify `docs.json` 工程结构，在 `doc/` 下创建可维护的 `GIS Agent` 文档站
 2. **代理接入主线**：在当前工作机本机 Nginx 运行态中把 `/doc` 接到本地 `mint dev` 预览
 
 ## 当前观察结论
@@ -51,7 +51,7 @@
 
 站点名称：
 
-- `GisAgent`
+- `GIS Agent`
 
 导航采用 `navigation.tabs`：
 

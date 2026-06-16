@@ -1,54 +1,53 @@
+﻿---
+title: 常见问题
 ---
-title: 常见问题 FAQ
----
 
-<script>{`(function(){function apply(){var footer=document.getElementById('footer');if(footer){footer.querySelectorAll('*').forEach(function(el){var text=(el.textContent||'').replace(/\s+/g,' ').trim();if(!text)return;if(text==='Powered by Mintlify'||text.indexOf('Powered by Mintlify')!==-1){el.textContent='Powered by GIS Agent';}else if(text==='Mintlify'){var parentText=(el.parentElement&&el.parentElement.textContent||'').replace(/\s+/g,' ').trim();if(parentText.indexOf('Powered by Mintlify')!==-1){el.textContent='GIS Agent';}}});}var meta=document.querySelector('meta[name="generator"]');if(meta){meta.setAttribute('content','GIS Agent');}}apply();new MutationObserver(apply).observe(document.documentElement,{childList:true,subtree:true});})();`}</script>
 
-# MapGIS Agent 常见问题解答 (FAQ)
+# 高频问题与解答
 
-本文整理了 MapGIS Agent 在产品认知、数据使用、成果管理和技术排查方面的常见问题。
+本文整理了 GIS Agent 在产品认知、数据使用、成果管理和技术排查方面的常见问题。
 
 ## 产品认知与定位
 
-### Q1: MapGIS Agent 是什么？它与通用 AI 工具的核心区别在哪里？
+### Q1: GIS Agent 是什么？它与通用 AI 工具的核心区别在哪里？
 
-**A:** MapGIS Agent 并非通用聊天机器人，其定位是 **“全时空智能生产操作系统”** 与 **“空间智能副驾驶”**。
+**A:** GIS Agent 并非通用聊天机器人，其定位是 **“全时空智能生产操作系统”** 与 **“空间智能副驾驶”**。
 
-* **核心区别：** 通用 AI（如 ChatGPT）擅长处理文本、代码等通用信息，但无法理解地理空间概念与操作。MapGIS Agent 深度集成于 **MapGIS 信创生态**，可直接理解并执行“缓冲区分析”、“流域提取”、“三维地质建模”等专业 GIS 任务。
-* **本质差异：** 通用 AI 更偏向“问答式”信息助手；MapGIS Agent 更偏向“交付式”专业团队，可直接产出地图应用与空间分析报告。
+* **核心区别：** 通用 AI（如 ChatGPT）擅长处理文本、代码等通用信息，但无法理解地理空间概念与操作。GIS Agent 深度集成于 **GIS 信创生态**，可直接理解并执行“缓冲区分析”、“流域提取”、“三维地质建模”等专业 GIS 任务。
+* **本质差异：** 通用 AI 更偏向“问答式”信息助手；GIS Agent 更偏向“交付式”专业团队，可直接产出地图应用与空间分析报告。
 
-### Q2: MapGIS Agent 旨在解决哪些核心痛点？
+### Q2: GIS Agent 旨在解决哪些核心痛点？
 
 **A:** 聚焦三大痛点：
 
-1. **降低使用门槛：** 传统 GIS 软件操作复杂，学习**成本高。MapGIS Agent 支持** **自然语言描述需求**，用户无需掌握底层库、数据库或后端开发技术。
-2. **提升响应效率：** 传统空间分析需求从提出到交付常需数天至数周。MapGIS Agent 可将流程压缩至分钟级或小时级，效率提升超 10 倍。
-3. **沉淀数字资产：** 项目经验易随人员流动而流失。MapGIS Agent 可将成功交付成果沉淀为可复用的行业 Skill，实现经验的数字化与规模化复用。
+1. **降低使用门槛：** 传统 GIS 软件操作复杂，学习**成本高。GIS Agent 支持** **自然语言描述需求**，用户无需掌握底层库、数据库或后端开发技术。
+2. **提升响应效率：** 传统空间分析需求从提出到交付常需数天至数周。GIS Agent 可将流程压缩至分钟级或小时级，效率提升超 10 倍。
+3. **沉淀数字资产：** 项目经验易随人员流动而流失。GIS Agent 可将成功交付成果沉淀为可复用的行业 Skill，实现经验的数字化与规模化复用。
 
-### Q3: 产品名称是“MapGIS Agent”还是“MapGIS GeoAgent”？
+### Q3: 产品名称是“GIS Agent”还是“GIS GeoAgent”？
 
-**A:** 内部全称为 **MapGIS GeoAgent**，对外发布及日常沟通中，统一使用 **MapGIS Agent** 这一简洁称谓，两者指向同一产品。
+**A:** 内部全称为 **GIS GeoAgent**，对外发布及日常沟通中，统一使用 **GIS Agent** 这一简洁称谓，两者指向同一产品。
 
 ## 使用基础与数据
 
-### Q4: 使用 MapGIS Agent 是否需要自行准备 API Key 或大模型？
+### Q4: 使用 GIS Agent 是否需要自行准备 API Key 或大模型？
 
 **A: 不需要**。
 
 * **在线版 (SaaS):** 开箱即用，用户登录网页即可使用，系统自动调度内置模型。
 * **本地部署版:** 由部署单位提供模型资源，用户无需自行申请与管理 API Key。
 
-### Q5: MapGIS Agent 在处理中国地理数据方面有何优势？
+### Q5: GIS Agent 在处理中国地理数据方面有何优势？
 
 **A:** 核心优势在于 **本地化适配 与 自主可控**。
 
-* **坐标系支持：** 内置 MapGIS 时空数据库内核，精准支持 **CGCS2000、北京 54、西安 80** 等国内常用坐标系。
+* **坐标系支持：** 内置 GIS 时空数据库内核，精准支持 **CGCS2000、北京 54、西安 80** 等国内常用坐标系。
 * **数据理解：** 深度理解中文地理命名规范与行政区划体系。
 * **安全合规：** 完全遵循信创标准，确保国内敏感数据处理的安全性与合规性。
 
-### Q6: MapGIS Agent 中的数据从哪里来？
+### Q6: GIS Agent 中的数据从哪里来？
 
-**A:** MapGIS Agent 本身不预存空间数据。其数据来源于：
+**A:** GIS Agent 本身不预存空间数据。其数据来源于：
 
 1. **用户上传：** 支持上传 Shapefile、GeoJSON、CSV 等格式的本地数据。
 2. **指定数据库：** 可连接并调用用户指定的新一代时空数据库中的数据（例如 OSM 数据）。
@@ -65,7 +64,7 @@ title: 常见问题 FAQ
 
 ## 成果输出与管理
 
-### Q8: 使用 MapGIS Agent 生成的分析成果（地图、报告）保存在哪里？
+### Q8: 使用 GIS Agent 生成的分析成果（地图、报告）保存在哪里？
 
 **A:** 保存位置取决于使用模式：
 
@@ -84,7 +83,7 @@ title: 常见问题 FAQ
 
 ### Q10: 如何处理地方独立坐标系或坐标不匹配的数据？
 
-**A:** MapGIS Agent 具备强大的坐标处理与数据融合能力。
+**A:** GIS Agent 具备强大的坐标处理与数据融合能力。
 
 * **自动处理：** 当上传数据坐标不统一时，可通过自然语言指令触发系统的自动识别、匹配与转换功能。
   * **指令示例：** “将我上传的‘地块.shp’（北京 54 坐标系）投影转换到 WGS84 坐标系，并与‘POI数据.csv’（WGS84）进行叠加分析。”

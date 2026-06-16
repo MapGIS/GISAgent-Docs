@@ -26,7 +26,7 @@
 
 ## 本次记录覆盖内容
 
-- 基于最新 Mintlify `docs.json` 结构创建 `GisAgent` 文档站
+- 基于最新 Mintlify `docs.json` 结构创建 `GIS Agent` 文档站
 - 将站点中文化，并把导航调整为多 Tab
 - 统一标题、logo、favicon 与蓝色主色调
 - 将 `AGENTS.md` 中的架构说明迁移到多页文档

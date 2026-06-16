@@ -334,7 +334,7 @@ generate_readme() {
 
 ## 概述
 
-本部署包包含 GisAgent 文档站的离线部署所需文件。
+本部署包包含 GIS Agent 文档站的离线部署所需文件。
 
 ## 内容
 

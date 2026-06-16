@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" role="img" aria-label="GisAgent">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" role="img" aria-label="GIS Agent">
   <circle cx="12" cy="12" r="11" fill="url(#logo-grad-favicon)"/>
   <ellipse cx="12" cy="12" rx="4.5" ry="11" fill="none" stroke="#fff" stroke-width="1.2" opacity="0.8"/>
   <line x1="1" y1="12" x2="23" y2="12" stroke="#fff" stroke-width="1.2" opacity="0.8"/>

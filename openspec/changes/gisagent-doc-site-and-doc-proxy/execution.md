@@ -1,4 +1,4 @@
-# 执行记录：GisAgent 文档站与 `/doc` 本机代理
+# 执行记录：GIS Agent 文档站与 `/doc` 本机代理
 
 ## 执行日期
 
@@ -38,7 +38,7 @@
 完成：
 
 - 全站中文化
-- 站点标题改为 `GisAgent`
+- 站点标题改为 `GIS Agent`
 - 导航从普通 `pages` 调整为 `tabs`
 
 ### 4. 本地 Mintlify 预览
