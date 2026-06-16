@@ -1,0 +1,8 @@
+/* Prefer Mintlify Assistant and keep the right-side panel open by default. */
+html {
+  --assistant-sheet-width: 368px !important;
+}
+
+#chat-assistant-sheet {
+  visibility: visible !important;
+}
