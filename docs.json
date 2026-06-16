@@ -26,15 +26,15 @@
           {
             "group": "产品介绍",
             "pages": [
-              "docs/product-overview",
+              "product-overview",
               "quickstart"
             ]
           },
           {
             "group": "常见问题",
             "pages": [
-              "docs/faq",
-              "docs/usage-tips"
+              "faq",
+              "usage-tips"
             ]
           }
         ]
@@ -45,8 +45,8 @@
           {
             "group": "协议与规则",
             "pages": [
-              "docs/product-rules",
-              "docs/privacy-policy"
+              "product-rules",
+              "privacy-policy"
             ]
           }
         ]
@@ -57,7 +57,7 @@
     "links": [
       {
         "label": "GitHub",
-        "href": "https://github.com/"
+        "href": "https://github.com/MapGIS/GISAgent-Docs"
       }
     ]
   },
@@ -75,7 +75,7 @@
   },
   "footer": {
     "socials": {
-      "github": "https://github.com/"
+      "github": "https://github.com/MapGIS/GISAgent-Docs"
     }
   }
 }
