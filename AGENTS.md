@@ -2,7 +2,7 @@
 
 ## Git network policy
 
-- For this repository, all future `git pull` and `git push` operations must use an HTTP remote, not SSH.
-- All fetch, pull, push, and other remote Git operations must be executed through a configured HTTP/HTTPS proxy.
-- When checking or updating the remote URL, prefer the HTTP form of the repository address.
-- If a proxy is required for the current shell session, set `http.proxy` and `https.proxy` before running remote Git commands.
+- For this repository, GitLab remote operations should use an SSH remote by default.
+- GitHub remote operations should use an HTTP or HTTPS remote unless explicitly overridden.
+- When checking or updating the GitLab remote URL, prefer the SSH form of the repository address.
+- Configure a network proxy only when the target remote or current shell environment actually requires it.
