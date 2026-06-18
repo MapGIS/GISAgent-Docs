@@ -3,7 +3,7 @@
 ## 1. Mintlify 托管接入
 
 - [x] 使用 GitHub 账号登录 Mintlify
-- [x] 为 `MapGIS/GISAgent-Docs` 安装 Mintlify GitHub App
+- [x] 为当前文档仓库安装 Mintlify GitHub App
 - [x] 完成首次托管部署
 - [x] 记录生成的 `*.mintlify.dev` 子域（当前上游为 `mapgis.mintlify.dev`）
 
@@ -26,7 +26,7 @@
 - [x] 将 `/docs` 反代到 `https://<project-subdomain>.mintlify.dev/docs`
 - [x] 放行 `/.well-known/` 验证路径
 - [x] 按官方要求补齐代理头
-- [x] 同步更新本地部署模板目录 `doc/deploy/nginx-20260602_164043`
+- [x] 同步更新历史部署模板目录 `doc/deploy/nginx-20260602_164043`
 - [x] 同步更新阿里云目录 `/opt/nginx/nginx-20260602_164043`
 - [x] 基于同步后的目录重建阿里云 `gisagent-nginx:latest`
 - [x] 在阿里云执行 `docker compose down && docker compose up -d`

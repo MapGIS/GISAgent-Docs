@@ -37,7 +37,7 @@
 
 本 change 的目标是：
 
-1. 将 `MapGIS/GISAgent-Docs` 接入 Mintlify 托管
+1. 将当前文档仓库接入 Mintlify 托管
 2. 获取可持续自动部署的 Mintlify 托管子域
 3. 为正式入口启用 `Host at /docs`
 4. 将 `gisagent.smaryun.com/docs` 反代到 Mintlify 托管子域
@@ -59,7 +59,7 @@
 
 ## 成功标准
 
-1. `MapGIS/GISAgent-Docs` 已接入 Mintlify 托管
+1. 当前文档仓库已接入 Mintlify 托管
 2. Mintlify Dashboard 中已启用 `Host at /docs`
 3. `gisagent.smaryun.com/docs` 可访问托管文档站
 4. 公网入口下全文搜索可用

@@ -61,7 +61,7 @@ Mintlify 托管完成后，将获得一个托管子域：
 
 内容继续以当前仓库为准：
 
-- GitHub 仓库：`MapGIS/GISAgent-Docs`
+- GitHub 仓库：当前文档仓库
 
 后续流程为：
 

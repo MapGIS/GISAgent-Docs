@@ -16,7 +16,7 @@ updated: 2026-06-17
 ## 当前状态
 
 - 方案已确认可行
-- `MapGIS/GISAgent-Docs` 已接入 Mintlify 托管
+- 当前文档仓库已接入 Mintlify 托管
 - `https://mapgis.mintlify.app/` 已可访问当前仓库内容
 - 本地与阿里云 `/docs -> mapgis.mintlify.dev/docs` 反代模板已同步
 - `http://gisagent.smaryun.com/docs` 已完成公网反代验收
