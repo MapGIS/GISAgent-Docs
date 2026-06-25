@@ -141,6 +141,25 @@
 - 文档入口 `/docs` 可访问
 - 两条路径已由 Nginx 正确分流
 
+### M. `Martin` TileJSON 子路径验证要求
+
+由于 `gisagent.smaryun.com` 同时承载 `/docs` 与 `/martin`，需要额外验证 `/martin` 在反代后返回的 TileJSON 外链是否保留子路径前缀。
+
+验证命令：
+
+```bash
+curl -s https://gisagent.smaryun.com/martin/shandong_osm.gis_osm_traffic_a_free_1 | jq '.tiles'
+```
+
+期望结果应包含：
+
+- `https://gisagent.smaryun.com/martin/shandong_osm.gis_osm_traffic_a_free_1/{z}/{x}/{y}`
+
+而不应返回：
+
+- `https://gisagent.smaryun.com/martin/{z}/{x}/{y}`
+- `https://gisagent.smaryun.com/shandong_osm.gis_osm_traffic_a_free_1/{z}/{x}/{y}`
+
 ### I. Mintlify 静态资源验证
 
 已从文档页 HTML 中确认：
@@ -279,6 +298,27 @@
 - 站内链接定义一致
 - Mintlify 构建可通过
 - 已无 CLI 可识别的坏链
+
+但进一步复核导出产物发现：
+
+- `export-site/quickstart/index.html` 存在
+- `export-site/docs/quickstart/index.html` 不存在
+- `export-site/docs/product-overview/index.html` 存在
+
+这说明 CLI 校验通过，并不等于 Mintlify 会将 `quickstart` 产出到 `/docs/quickstart`。
+
+### P. 反代兼容补丁验证策略
+
+针对 Mintlify 当前真实产物路径，补充服务端兼容方案：
+
+- `location = /docs/quickstart`
+- 内部改写到上游 `/quickstart`
+- 页面内 `href="/"` 继续改写为 `href="/docs"`
+- 页面内 `href="/quickstart"` 继续改写为 `href="/docs/quickstart"`
+
+该方案的目标不是修改 Mintlify 产物，而是保证公网正式入口继续稳定为：
+
+- `/docs/quickstart`
 
 ## 当前未完成
 

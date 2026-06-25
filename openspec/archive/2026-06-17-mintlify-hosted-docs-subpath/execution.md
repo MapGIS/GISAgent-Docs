@@ -259,6 +259,34 @@
 - `http://gisagent.smaryun.com/...` 已修复可用
 - `https://gisagent.smaryun.com/...` 仍不可用，原因是当前未配置 TLS 监听与证书
 
+### 16. `/martin` TileJSON 子路径回归修正
+
+后续又发现同域下的 `Martin` 服务虽可通过：
+
+- `https://gisagent.smaryun.com/martin`
+- `https://gisagent.smaryun.com/martin/catalog`
+
+正常访问，但具体数据源的 TileJSON 中 `tiles` 字段错误生成为根路径：
+
+- `https://gisagent.smaryun.com/shandong_osm.gis_osm_traffic_a_free_1/{z}/{x}/{y}`
+
+而不是外部真实入口：
+
+- `https://gisagent.smaryun.com/martin/shandong_osm.gis_osm_traffic_a_free_1/{z}/{x}/{y}`
+
+排查结论：
+
+1. Nginx 已将 `/martin/` 重写后转发到后端
+2. 但未向 Martin 传递 `X-Rewrite-URL: $request_uri`
+3. 同时 `X-Forwarded-Host` 透传为 `$host:$server_port`，导致公开 URL 出现多余的 `:443`
+
+因此执行以下修正：
+
+1. 为 `/martin/` location 增加 `proxy_set_header X-Rewrite-URL $request_uri;`
+2. 保留 `proxy_set_header X-Forwarded-Prefix /martin;` 作为补充头
+3. 将 `/martin/` location 的 `X-Forwarded-Host` 调整为 `$host`
+4. 将模板与运行配置同步更新到 `docker/nginx` 与 `openspec/changes/docker-nginx-framework`
+
 ### 16. HTTPS 落地与静态资源恢复
 
 后续已在阿里云完成：
@@ -381,6 +409,36 @@
 - 让 Mintlify 从内容源头只生成 `/docs/...` 站内路径
 - 不再依赖代理层字符串替换修复导航
 
+### 19B. 生成产物复核与反代兼容补丁
+
+重新使用本地 Mintlify CLI 导出后，问题仍然存在：
+
+- `npx mintlify@latest export`
+- `export-site/quickstart/index.html` 存在
+- `export-site/docs/quickstart/index.html` 不存在
+- `export-site/docs/product-overview/index.html` 正常存在
+
+并且导出 HTML 中可直接看到页面元数据仍被解析为根级页面：
+
+- `quickstart` 页：`data-page-href="/src/_props/quickstart"`
+- `product-overview` 页：`data-page-href="/src/_props/docs/product-overview"`
+
+这说明当前 `quickstart` 混合路径问题并非旧缓存，也不是阿里云 Nginx 独有行为，而是 Mintlify 当前生成结果本身。
+
+在无法立即改变 Mintlify 产物的前提下，补充反代兼容策略：
+
+1. 为 `location = /docs/quickstart` 增加精确匹配
+2. 在该 location 内部将请求改写到上游真实存在的 `/quickstart`
+3. 保留现有 HTML `sub_filter`，把页面内 `href="/"`、`href="/quickstart"` 继续收敛回 `/docs` 体系
+
+这样可以保证外部用户继续访问：
+
+- `/docs/quickstart`
+
+而无需暴露 Mintlify 当前内部实际生成的根路径：
+
+- `/quickstart`
+
 ### 20. HTTPS 证书与 443 监听落地
 
 随后已在阿里云主机执行：
@@ -411,6 +469,42 @@
 - `0.0.0.0:443` 已监听
 - `[::]:443` 已监听
 - 容器状态为 `healthy`
+
+### 24. 2026-06-17 主站 HTTPS 临时 502 排障
+
+`2026-06-17` 现场排查 `https://gisagent.smaryun.com/` 不可访问时，确认并非 TLS 证书或 `443` 监听异常，而是主站上游解析缓存导致：
+
+- `curl -kI https://gisagent.smaryun.com/` 返回 `HTTP/2 502`
+- TLS 握手正常，证书为 `CN=gisagent.smaryun.com`
+- `gisagent-nginx` 错误日志持续报：
+  - `connect() failed (111: Connection refused) while connecting to upstream`
+  - upstream 指向旧地址 `http://172.23.0.7:3000`
+
+进一步核对容器网络状态：
+
+- `mapgis-ai-gisagent` 当前实际 IP 已变为 `172.23.0.10`
+- 在 `gisagent-nginx` 容器内直接访问 `http://mapgis-ai-gisagent:3000/` 返回 `302 Location: /gis/`
+
+因此根因确认是：
+
+- `gisagent-nginx` 在后端容器重启后继续缓存旧的 Docker DNS 解析结果
+- 主站 `/` 代理仍尝试连接旧 IP，导致公网返回 `502 Bad Gateway`
+
+修复动作：
+
+```bash
+docker exec gisagent-nginx nginx -s reload
+```
+
+重载后再次验证：
+
+- `https://gisagent.smaryun.com/` 返回 `302 Location: /gis/`
+- `https://gisagent.smaryun.com/docs` 返回 `200`
+
+运维结论：
+
+- `mapgis-ai-gisagent` 或 `postgis-gateway` 重启后，需要同步执行 `docker exec gisagent-nginx nginx -s reload`
+- 否则 `gisagent-nginx` 可能继续使用旧容器 IP，表现为主站或 `/martin/` 间歇性 `502`
 
 ## 后续待执行
 

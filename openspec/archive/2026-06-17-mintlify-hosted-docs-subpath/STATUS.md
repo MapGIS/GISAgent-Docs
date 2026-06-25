@@ -4,7 +4,7 @@ description: "GIS Agent 文档站接入 Mintlify 托管，并通过 `gisagent.sm
 metadata:
   type: project
 status: proposed
-updated: 2026-06-16
+updated: 2026-06-17
 ---
 
 # Mintlify 托管 `/docs` 子路径接入状态
@@ -20,6 +20,8 @@ updated: 2026-06-16
 - `https://mapgis.mintlify.app/` 已可访问当前仓库内容
 - 本地与阿里云 `/docs -> mapgis.mintlify.dev/docs` 反代模板已同步
 - `http://gisagent.smaryun.com/docs` 已完成公网反代验收
+- `https://gisagent.smaryun.com/` 与 `https://gisagent.smaryun.com/docs` 当前可访问
+- 已确认 `gisagent-nginx` 在后端容器重启后会缓存旧 IP，需执行 `nginx -s reload` 刷新上游解析
 - 尚未完成搜索与 Assistant 的正式功能验收
 
 ## 目标结果

@@ -113,6 +113,31 @@ Mintlify 托管完成后，将获得一个托管子域：
 3. 不透传自定义 `Host` 到上游
 4. 传递 `Origin`、`X-Forwarded-For`、`X-Forwarded-Proto`、`X-Real-IP`、`User-Agent`
 
+### 与同域 `/martin` 的共存约束
+
+同一 `server` 内还存在 `Martin` 的 `/martin/` 子路径代理。该位置除了常规路径重写外，还必须补充：
+
+- `X-Rewrite-URL: $request_uri`
+- `X-Forwarded-Prefix: /martin`
+- `X-Forwarded-Host: $host`
+
+否则 `Martin` 返回的 TileJSON `tiles` URL 会丢失 `/martin` 前缀、source id，或暴露不必要的 `:443` 端口。
+
+### 同机部署的上游稳定性
+
+若 Nginx 与业务容器位于同一宿主机，且业务容器已经通过宿主机端口映射对外暴露，则正式入口更适合优先代理到宿主机稳定端口，而不是直接依赖 Docker 容器名解析。
+
+原因是：
+
+- Docker 容器重启后 IP 可能变化
+- Nginx 可能继续缓存旧的容器 DNS 结果
+- 这会表现为公网 `502 Bad Gateway`，直到手动执行 `nginx -s reload`
+
+因此运维建议是：
+
+- 同机统一入口优先使用宿主机稳定端口，例如 `host.docker.internal:17076`
+- 若必须使用容器名上游，则在后端容器重启后同步 reload Nginx
+
 ### 参考结构
 
 建议提供三类 location：
@@ -147,4 +172,3 @@ Mintlify 托管完成后，将获得一个托管子域：
 
 - `/doc` 与 `/docs` 双路径兼容
 - 本地静态 Docker 方案搜索增强
-
