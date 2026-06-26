@@ -1,0 +1,73 @@
+---
+title: "技能新增能力"
+description: "汇总本轮 clis 子仓库新增或显著增强的技能能力"
+---
+
+本文归纳本轮迭代中 `clis/` 子仓库新增或明显增强的技能能力，重点关注 agent 可调用的入口能力，而不是逐文件罗列代码变更。
+
+<Tip>
+  原始工程记录位于 `openspec/changes/sync-skills-from-gitlab/clis-new-skill-capability-log.md`。
+</Tip>
+
+## `3dtiles-cli`
+
+来源：`clis/3dtiles_cli`
+
+### 新增能力
+
+- 新建独立 3D Tiles CLI 技能入口。
+- 支持 3D Tiles 数据生成、导出、检查与执行计划输出。
+- 提供 `skills/3dtiles-cli/SKILL.md` 作为稳定技能入口。
+- 提供 Docker 构建脚本，便于 sidecar 或独立运行时复用。
+
+### 本轮增强
+
+- 优化矢量纹理导出默认值。
+- 改进默认材质与纹理生成行为。
+- 增加测试覆盖，确保默认导出行为可回归验证。
+
+## `knowledge-cli`
+
+来源：`clis/knowledge_cli`
+
+### 新增能力
+
+- 强化知识图谱 G6 渲染模板。
+- 明确 `agents/openai.yaml` 路由配置。
+- 增加知识图谱输出校验脚本。
+
+### 收敛方向
+
+- 收紧触发规则，避免非知识任务误走该技能。
+- 将技能说明从“能力描述”收敛到“触发边界和禁用边界”。
+
+## `postgis-service-cli`
+
+来源：`clis/postgis_service_cli`
+
+### 新增能力
+
+- 新增 3D Tiles 发布能力。
+- 新增 Cesium 预览链路。
+- 增加 Postgres 3D Tiles 自动发现能力。
+- 增加大陆城市可重复导入流水线。
+- 增加 SQL、示例脚本与运行文档，补齐从数据准备到服务发布的操作面。
+
+### 对技能层的直接影响
+
+- `skills/postgis-service-cli/SKILL.md` 已从传统 tiles/style 指导扩展到 3D Tiles 发布与预览指导。
+- agent 可以沿着以下链路调用：
+  - 发现 3D Tiles 数据源
+  - 发布服务
+  - 打开预览
+  - 处理 catalog、样式、sprite 和 URL 输出
+
+## 能力链路
+
+1. `3dtiles-cli` 负责 3D Tiles 生产与导出。
+2. `postgis-service-cli` 负责 3D Tiles 发布、发现与预览。
+3. `knowledge-cli` 负责知识图谱输出与稳定路由。
+
+<Note>
+  这轮不是简单增加几个技能目录，而是补齐了三条可以被 agent 直接消费的能力面：3D Tiles 生产、3D Tiles 发布预览、知识图谱稳定触发。
+</Note>

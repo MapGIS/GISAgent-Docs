@@ -36,6 +36,14 @@
               "docs/faq",
               "docs/usage-tips"
             ]
+          },
+          {
+            "group": "技能迭代",
+            "pages": [
+              "docs/skills-daily-update-log",
+              "docs/skills-new-capabilities",
+              "docs/skills-frontend-bugfix-log"
+            ]
           }
         ]
       },
