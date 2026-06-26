@@ -61,14 +61,7 @@
       }
     ]
   },
-  "navbar": {
-    "links": [
-      {
-        "label": "GitHub",
-        "href": "https://github.com/MapGIS/GISAgent-Docs"
-      }
-    ]
-  },
+  "navbar": {},
   "contextual": {
     "options": [
       "copy",
@@ -81,9 +74,5 @@
       "vscode"
     ]
   },
-  "footer": {
-    "socials": {
-      "github": "https://github.com/MapGIS/GISAgent-Docs"
-    }
-  }
+  "footer": {}
 }
