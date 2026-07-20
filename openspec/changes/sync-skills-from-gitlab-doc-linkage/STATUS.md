@@ -17,6 +17,7 @@ metadata:
 - 统一汇总稿保留在 `doc/update.md`
 - Mintlify 阅读页保留在 `doc/docs/skills-detailed-update-log.mdx`
 - 文档侧追踪记录保留在 `doc/openspec/changes/sync-skills-from-gitlab-doc-linkage`
+- `doc/update.md` 的固定输入已明确包含 `clis/`、`gisagent/` 与 `skills/`
 
 ## 2026-07-20 复核说明
 

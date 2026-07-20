@@ -10,7 +10,7 @@
 
 2. `doc/update.md`
    - 作为统一汇总稿
-   - 固定承接 `clis/` 与 `gisagent/` 两个来源
+   - 固定承接 `clis/`、`gisagent/` 与 `skills/` 三个来源
 
 3. `doc/docs/*.mdx`
    - 作为文档站消费层
@@ -28,6 +28,7 @@
 - 每日更新
 - 新增能力
 - 前端与修复
+- `skills/` 工作区能力变化
 
 `doc/update.md` 则作为更稳定的汇总稿，用于后续继续镜像、摘录或重组。
 
@@ -44,6 +45,8 @@
 ### 从汇总稿到文档页
 
 `doc/update.md` 记录固定来源和统一摘要；`skills-detailed-update-log.mdx` 承接对外阅读结构。
+
+其中 `skills/` 来源采用工作区 Git 提交归纳，不要求逐个 `SKILL.md` 生成独立 changelog。
 
 ### 从工程记录回链到文档站
 

@@ -8,6 +8,7 @@
 
 - `openspec` 工程记录已存在
 - `doc/update.md` 统一汇总稿已存在
+- `doc/update.md` 的固定输入已补正为 `clis/`、`gisagent/` 与 `skills/`
 - Mintlify `.mdx` 页面已收敛为单页
 - `docs.json` 导航已补齐
 - `doc/openspec/changes` 已建立联动 change

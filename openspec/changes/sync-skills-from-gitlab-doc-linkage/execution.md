@@ -27,6 +27,7 @@
 
 - `openspec/changes/sync-skills-from-gitlab/clis-detailed-update-log.md`
 - `gisagent/CHANGELOG.md`
+- `/home/maptex/Code/xcsmartdatabase/skills` 仓库 Git 提交与实际文件变更
 
 ### 3. 导航接入
 
@@ -57,6 +58,15 @@
 - 只有 `doc/openspec/changes/sync-skills-from-gitlab-doc-linkage` 仍残留旧方案描述
 
 因此本次修正仅针对文档侧 OpenSpec 记录做事实对齐，不改动既有发布页结构。
+
+### 7. 2026-07-20 汇总边界补正
+
+进一步复核后确认：
+
+- 旧约定只把 `clis/` 与 `gisagent/` 写进 `doc/update.md` 固定输入
+- `/home/maptex/Code/xcsmartdatabase/skills` 的实际更新没有进入固定汇总边界
+
+因此本次补正将 `skills/` 工作区明确纳入统一汇总输入。
 
 ## 当前结果
 

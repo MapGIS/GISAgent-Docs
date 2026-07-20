@@ -14,7 +14,7 @@
 
 1. `doc/update.md`
    - 统一汇总稿
-   - 固定汇总 `clis/` 与 `gisagent/`
+   - 固定汇总 `clis/`、`gisagent/` 与 `skills/`
 2. `doc/docs/skills-detailed-update-log.mdx`
    - Mintlify 对外阅读页
    - 通过 `docs.json` 导航暴露
@@ -60,8 +60,9 @@
 ## 成功标准
 
 1. `doc/update.md` 存在且明确标注固定来源
-2. 文档站存在 1 个新的技能迭代页面 `docs/skills-detailed-update-log.mdx`
-3. 页面为 Mintlify `.mdx` 格式
-4. `docs.json` 中存在可访问导航入口
-5. `doc/openspec/changes` 中存在本次联动 change
-6. 原始 openspec change 能回链到文档侧页面与联动 change
+2. `doc/update.md` 的固定来源明确包含 `clis/`、`gisagent/` 与 `skills/`
+3. 文档站存在 1 个新的技能迭代页面 `docs/skills-detailed-update-log.mdx`
+4. 页面为 Mintlify `.mdx` 格式
+5. `docs.json` 中存在可访问导航入口
+6. `doc/openspec/changes` 中存在本次联动 change
+7. 原始 openspec change 能回链到文档侧页面与联动 change
