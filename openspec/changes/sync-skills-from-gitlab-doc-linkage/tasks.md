@@ -12,3 +12,5 @@
 - [x] 在原始 `openspec` change 中补充统一页面与汇总稿联动说明
 - [x] 校正文档侧联动 change，消除旧“三页方案”与现状的不一致
 - [x] 校正“只汇总 `clis/` 与 `gisagent/`”的旧边界，纳入 `skills/` 工作区更新
+- [x] 将 `gisagent` 固定来源从 `CHANGELOG.md` 改为 Git log
+- [x] 新增可执行脚本，自动重写 `doc/update.md` 与 `docs/skills-detailed-update-log.mdx`

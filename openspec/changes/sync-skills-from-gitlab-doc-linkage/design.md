@@ -16,6 +16,10 @@
    - 作为文档站消费层
    - 使用 Mintlify frontmatter 和组件
 
+4. `doc/scripts/generate_skill_update.py`
+   - 作为统一生成器
+   - 直接查询固定 Git 来源并重写汇总稿和文档页
+
 ## 页面收敛
 
 文档站侧只保留 1 个页面：
@@ -47,6 +51,7 @@
 `doc/update.md` 记录固定来源和统一摘要；`skills-detailed-update-log.mdx` 承接对外阅读结构。
 
 其中 `skills/` 来源采用工作区 Git 提交归纳，不要求逐个 `SKILL.md` 生成独立 changelog。
+`gisagent/` 来源同样改为 Git 提交归纳，不再以 `CHANGELOG.md` 作为固定事实源。
 
 ### 从工程记录回链到文档站
 

@@ -26,6 +26,7 @@
 - `docker-compose-deploy/STATUS.md`
 - `sync-skills-from-gitlab-doc-linkage/proposal.md`
 - `sync-skills-from-gitlab-doc-linkage/design.md`
+- `sync-skills-from-gitlab-doc-linkage/automation.md`
 - `sync-skills-from-gitlab-doc-linkage/tasks.md`
 - `sync-skills-from-gitlab-doc-linkage/execution.md`
 - `sync-skills-from-gitlab-doc-linkage/validation.md`
@@ -42,6 +43,7 @@
 - 记录当前工作机本机 `/doc` 代理接入与验证结果
 - 记录将文档站从本机 `mint dev` 代理切换到 `docker compose` 部署的目标方案
 - 记录 `sync-skills-from-gitlab` 工程更新如何映射为 Mintlify 文档页面
+- 记录 `sync-skills-from-gitlab` 文档联动的自动化入口与执行方式
 
 ## 当前边界
 

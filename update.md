@@ -5,39 +5,19 @@
 - 汇总日期：2026-07-20
 - 状态截止：2026-07-20
 - 来源文件：
-  - `openspec/changes/sync-skills-from-gitlab/clis-detailed-update-log.md`
-  - `gisagent/CHANGELOG.md`
-  - `/home/maptex/Code/xcsmartdatabase/skills` Git 提交与实际文件变更
+  - `/home/maptex/Code/xcsmartdatabase/clis` 下各子仓库 Git log
+  - `/home/maptex/Code/xcsmartdatabase/gisagent` Git log
+  - `/home/maptex/Code/xcsmartdatabase/skills` Git log
 - 说明：
-  - 本文件是 `sync-skills-from-gitlab` 当前固定产物。
+  - 本文件由 `doc/scripts/generate_skill_update.py` 自动生成。
   - 汇总范围固定为 `clis/`、`gisagent/` 与 `skills/`。
-  - 这不是逐个 `SKILL.md` 自动生成的全量更新日志。
-  - 若某个来源在本轮无新增条目，必须显式写明。
-
-## 本轮结论
-
-- `clis/`：
-  - 截至 2026-07-20，当前固定来源仍是 `clis-detailed-update-log.md`。
-  - 既有整理稿覆盖范围为 **2026-06-10 至 2026-06-25**。
-  - **2026-06-25 之后，本轮有新增提交条目。**
-  - 新增内容主要集中在 `3dtiles_cli`、`knowledge_cli`、`postgis_service_cli`，并新增 `geomoder_cli`。
-- `gisagent/`：
-  - 截至 2026-07-20，当前固定来源仍是 `gisagent/CHANGELOG.md`。
-  - 当前最新版本记录仍为 `0.1.3`。
-  - **本轮没有看到高于 `0.1.3` 的新增版本条目。**
-- `skills/`：
-  - 截至 2026-07-20，当前固定来源已纳入 `/home/maptex/Code/xcsmartdatabase/skills`。
-  - **本轮有 2026-07-20 的新增提交条目。**
-  - 这批更新集中在代理约束、运行环境、打包脚本和忽略规则整理。
+  - 这不是逐个 `SKILL.md` 自动生成的全量 changelog，而是对固定来源 Git 提交的统一汇总。
 
 ## 更新概览
 
-- **3D Tiles 工具链已经成型**：`clis/` 侧已补齐生成、发布、自动发现和前端预览这一条主链路。
-- **知识图谱能力继续收敛**：知识图谱渲染质量提升，技能触发规则更严格，误调用更少。
-- **`clis/` 在 2026-07-20 前仍持续演进**：3D Tiles 增加 OBJ 分片与地质网格支持，知识图谱补入海事知识，PostGIS 3D Tiles 自动发现与目录工具继续扩展。
-- **GIS Agent 已进入可运维阶段**：会话持久化、停止生成、路由调整和管理界面能力已经落地。
-- **`skills/` 工作区在 2026-07-20 有明确增量**：代理仓库补写 Git 路由规则，补齐环境文件、部署脚本模板和运行时刷新脚本。
-- **`gisagent/` 截至 2026-07-20 无新的版本增量**：本轮增量主要来自 `clis/` 和 `/skills` 工作区。
+- **`clis/` 持续演进**：`5` 个子仓库新增 `65` 条提交，重点集中在 `postgis_service_cli、3dtiles_cli、knowledge_cli`。
+- **`gisagent/` 继续迭代**：累计 `34` 条提交，最近更新到 `2026-07-17`。
+- **`skills/` 工作区继续收敛**：累计 `7` 条提交，最近更新到 `2026-07-20`。
 
 ---
 
@@ -45,165 +25,160 @@
 
 ### 本轮状态
 
-- 来源文件：`openspec/changes/sync-skills-from-gitlab/clis-detailed-update-log.md`
-- 已整理稿覆盖区间：2026-06-10 至 2026-06-25
-- 截至 2026-07-20 的结论：
-  - **本轮有新增条目**
-  - `clis-detailed-update-log.md` 还没有吸收 2026-06-26 至 2026-07-20 的增量
-  - 新增重点包括 3D Tiles 建模增强、知识图谱与海事知识扩展、PostGIS 3D Tiles 自动发现增强，以及 `geomoder_cli` 新增
+- 来源：`/home/maptex/Code/xcsmartdatabase/clis` 下各子仓库 Git log
+- 统计区间：2026-06-10 至 2026-07-20
+- 本轮共有 `5` 个子仓库发生更新，累计 `65` 条提交
+- 最近更新日期：`2026-07-20`
+- 重点仓库：`postgis_service_cli、3dtiles_cli、knowledge_cli`
 
-### 2026-06-26 至 2026-07-20 增量摘要
+### `knowledge_cli`
 
-#### `3dtiles_cli`
+- 提交数：`9`，区间：`2026-06-11` 至 `2026-07-20`
+- `2026-06-11` `4096016` feat: refine knowledge graph g6 rendering
+- `2026-06-14` `6e6c364` chore: sync workspace changes
+- `2026-06-14` `1fa1675` chore: sync workspace changes
+- `2026-06-23` `7b8c522` Refine knowledge skill trigger rules
+- `2026-06-29` `94aa42b` feat: update knowledge-mcp and graph-g6-render
+- `2026-07-06` `1f0b91f` ci: add open code review pipeline
+- `2026-07-06` `707d57d` ci: retry alpine package install
+- `2026-07-08` `3676308` feat:add nautical knowlidge
+- `2026-07-20` `779bd86` chore: sync local changes 2026-07-20
 
-- `2026-06-26`：
-  - `7373887` 使用 `ogr2ogr` 处理 shapefile 矢量
-  - `14ad61d` 更新 Docker 环境
-- `2026-07-03`：
-  - `92b46e9` 新增 OBJ 分片制瓦与地质网格支持
-- `2026-07-16`：
-  - `12ff913` 修复无纹理 OBJ 的 UV 坐标保留问题
+### `postgis_service_cli`
 
-#### `knowledge_cli`
+- 提交数：`34`，区间：`2026-06-10` 至 `2026-07-20`
+- `2026-06-10` `61b5899` env:fix docker var
+- `2026-06-11` `f235ec9` Refine MapLibre gateway style guidance
+- `2026-06-11` `5b774a4` docs: update postgis service skill sprite path
+- `2026-06-16` `c55012f` Add 3D Tiles publishing and Cesium preview support
+- `2026-06-16` `6ecc556` docs: clarify 3dtiles source boundary
+- `2026-06-16` `0b1af57` docs: record 3dtiles publishing smoke test
+- `2026-06-16` `2279b67` fix: reject 3dtiles manifest symlink escapes
+- `2026-06-16` `8693470` docs: archive 3dtiles openspec changes
+- `2026-06-16` `e83c5b5` ci: use precompiled maplibre native by default
+- `2026-06-16` `bb8b303` test: align server tests with gateway state
+- `2026-06-16` `11b572e` test: restore pg server fixture initialization
+- `2026-06-16` `f05e53b` test: align pg table sources with qualified ids
+- `2026-06-17` `58700ea` Add repeatable mainland 3dtiles ingest pipeline
+- `2026-06-25` `4ef0421` feat: expand 3dtiles support and discovery
+- `2026-06-26` `e6ce584` docs: sync postgis service skill with 3dtiles guidance
+- `2026-06-26` `b2034ea` Merge branch 'main' into 3dtile
+- `2026-06-28` `fcc3c68` Add OSM building materials catalog
+- `2026-06-28` `bb15b85` Add material catalog URLs
+- `2026-06-29` `a354325` feat: update materials-catalog and postgres-3dtiles-source
+- `2026-07-08` `209b46b` Add hk260702 pipe 3dtiles prepare script
+- `2026-07-08` `4f491b4` Align hk260702 valve center offset from model geometry
+- `2026-07-08` `edd7d64` Revert invalid hk260702 valve offset formula
+- `2026-07-08` `d401145` Use PostGIS oracle normals for hk260702 valves
+- `2026-07-08` `49b8e62` Persist hk260702 pipe transparency
+- `2026-07-08` `a5d9da7` Restore hk260702 valve asset node transforms
+- `2026-07-08` `4bbb056` Use baked hk260702 valve instancing asset
+- `2026-07-08` `39a2212` Orient hk260702 valves along pipe tangents
+- `2026-07-08` `37f4bfb` Fix hk260702 valve local up orientation
+- `2026-07-08` `38d5f25` Restore hk260702 pipe opacity and halve radius
+- `2026-07-08` `6665216` Make hk260702 pipe material visible
+- `2026-07-08` `d63c23a` Lift hk260702 pipe body above terrain
+- `2026-07-08` `0c7e817` Strip invalid hk260702 pipe GLB metadata
+- `2026-07-08` `b6ec828` Expand 3dtiles auto-discovery and catalog tooling
+- `2026-07-20` `b7225d8` chore: sync local changes 2026-07-20
 
-- `2026-06-29`：
-  - `94aa42b` 更新 `knowledge-mcp` 和 `graph-g6-render`
-- `2026-07-08`：
-  - `3676308` 补入海事知识数据与相关技能内容
-- `2026-07-20`：
-  - `779bd86` 同步本地变更
+### `postgiscli`
 
-#### `postgis_service_cli`
+- 提交数：`5`，区间：`2026-06-29` 至 `2026-07-20`
+- `2026-06-29` `d4fd258` feat: update Dockerfile and skill documentation
+- `2026-07-06` `818e32e` ci: add open code review pipeline
+- `2026-07-06` `9da7961` ci: retry alpine package install
+- `2026-07-08` `7449ae5` feat:add docker env
+- `2026-07-20` `14e33a3` chore: sync local changes 2026-07-20
 
-- `2026-06-26`：
-  - `e6ce584` 同步 PostGIS 服务技能与 3D Tiles 指引
-- `2026-06-29`：
-  - `a354325` 更新 materials catalog 和 `postgres-3dtiles-source`
-- `2026-07-08`：
-  - `b6ec828` 扩展 3D Tiles 自动发现与 catalog tooling
-  - 同日连续提交补齐 `hk260702` 管线/阀门 3D Tiles 数据准备与显示修正
-- `2026-07-20`：
-  - `b7225d8` 同步本地变更
+### `geomoder_cli`
 
-#### `geomoder_cli`
+- 提交数：`6`，区间：`2026-07-03` 至 `2026-07-17`
+- `2026-07-03` `0ed380a` Initial geomoder_cli import
+- `2026-07-06` `ac74a68` ci: add open code review pipeline
+- `2026-07-06` `27d4f0f` ci: retry alpine package install
+- `2026-07-08` `d54ae27` feat: add docker env
+- `2026-07-16` `1341aca` feat: improve geological volume modeling pipeline
+- `2026-07-17` `7559bce` Fix optional Docker dependencies
 
-- `2026-07-03`：
-  - `0ed380a` 初始导入 `geomoder_cli`
-- `2026-07-16`：
-  - `1341aca` 改进地质体建模流水线
-- `2026-07-17`：
-  - `7559bce` 修复可选 Docker 依赖
+### `3dtiles_cli`
 
-#### `postgiscli`
+- 提交数：`11`，区间：`2026-06-24` 至 `2026-07-16`
+- `2026-06-24` `419d211` Initial 3dtiles_cli implementation
+- `2026-06-25` `8668da7` feat: improve vector texture export defaults
+- `2026-06-25` `aac3aa3` feat:add docker env
+- `2026-06-25` `3b634c2` feat:add gitignore
+- `2026-06-26` `7373887` feat: use ogr2ogr for shapefile vectors
+- `2026-06-26` `14ad61d` env: update docker env
+- `2026-07-03` `92b46e9` feat: add OBJ split tiling and geology mesh support
+- `2026-07-06` `9904a78` ci: add open code review pipeline
+- `2026-07-06` `70aedb8` ci: retry alpine package install
+- `2026-07-08` `a480ea9` feat: add docker env
+- `2026-07-16` `12ff913` fix: preserve OBJ UV coordinates without textures
 
-- `2026-06-29`：
-  - `d4fd258` 更新 Dockerfile 与技能文档
-- `2026-07-20`：
-  - `14e33a3` 同步本地变更
-
-### 最近一次已整理更新
-
-#### 2026-06-25
-
-**完善「3D Tiles 工具链」**：新增独立 CLI、默认导出优化和 Docker 构建环境补齐。3D Tiles 相关能力从零散脚本整理为稳定工具入口。
-
-**扩展「3D Tiles 自动发现与预览」**：地图服务继续补齐自动发现、目录入口和前端预览链路，减少手工配置成本。
-
-#### 2026-06-24
-
-**新建「3D Tiles 独立工具链」**：`3dtiles_cli` 初始化完成，后续 3D Tiles 能力可以独立迭代和调用。
-
-#### 2026-06-23
-
-**收紧「知识技能触发规则」**：非知识查询场景下降低误触发，技能路由更稳定。
-
-#### 2026-06-17
-
-**新增「3D Tiles 可重复导入流水线」**：面向大陆城市数据建立可重复导入流程，便于批量三维数据准备。
-
-#### 2026-06-16
-
-**上线「3D Tiles 发布与 Cesium 预览」**：地图服务支持发布 3D Tiles 并直接预览，同时补上安全校验和测试链路。
-
-#### 2026-06-14
-
-**优化「知识图谱渲染与校验」**：增强技能路由约束并补齐结果校验，知识图谱输出更一致。
-
-#### 2026-06-11
-
-**优化「知识图谱 G6 渲染」**：图谱展示质量提升，更适合直接生成 HTML 结果。
-
-**收敛「地图样式指引」**：统一 MapLibre 网关样式和 sprite 路径说明，减少配置漂移。
-
-#### 2026-06-10
-
-**修复「Docker 环境变量配置」**：修正容器内变量和样式资源引用，降低部署偏差。
 
 ## gisagent/
 
 ### 本轮状态
 
-- 来源文件：`gisagent/CHANGELOG.md`
-- 截至 2026-07-20 的结论：
-  - **本轮无新增版本条目**
-  - 当前最新版本仍为 `0.1.3`
+- 来源：`/home/maptex/Code/xcsmartdatabase/gisagent` Git log
+- 统计区间：2026-06-10 至 2026-07-20
+- 本轮累计 `34` 条提交
+- 最近更新日期：`2026-07-17`
 
-### 当前最新版本摘要
+### 提交列表
 
-#### 0.1.3
+- `2026-06-10` `36a9f82` 分享社区时可以选择技能
+- `2026-06-10` `ab86583` fix: error url make error
+- `2026-06-10` `e3074db` fix: harden web server and sse runtime stability
+- `2026-06-11` `a578463` 收藏改成点赞
+- `2026-06-11` `d9857bb` Merge branch 'main' of http://code.maptex.top/xcsmartdatabase/gisagent
+- `2026-06-11` `1ac9c50` 优化对话和修改解绑逻辑
+- `2026-06-14` `ebb9491` feat(gis): configure enterprise wechat community qr
+- `2026-06-14` `9fdaf7f` feat:add e2e test for http and https
+- `2026-06-15` `b3c2843` 优化对话，添加帮助链接
+- `2026-06-15` `2bad330` Merge branch 'main' of http://code.maptex.top/xcsmartdatabase/gisagent
+- `2026-06-15` `98022c1` 合并代码
+- `2026-06-16` `d270dcd` 优化做同款
+- `2026-06-16` `b7c38ef` feat:add e2e test
+- `2026-06-16` `20b55aa` 更新社区浏览计数
+- `2026-06-16` `da37f63` Merge branch 'main' of http://code.maptex.top/xcsmartdatabase/gisagent
+- `2026-06-17` `1d1b3f3` fix: correct help docs link
+- `2026-06-17` `d7ed165` 优化对话的效率和状态管理
+- `2026-06-17` `e31ff81` Merge branch 'main' of http://code.maptex.top/xcsmartdatabase/gisagent
+- `2026-06-18` `a4e71e4` 输入框自适应
+- `2026-06-18` `2e183db` fix: redirect webui routes to services path
+- `2026-06-23` `b03beb7` Update community QR image
+- `2026-06-25` `a092857` chore: sync workspace changes
+- `2026-06-28` `f8c518f` feat: add user analysis dashboard exports
+- `2026-06-28` `4d59e98` test: add qwen30b regression tooling
+- `2026-06-29` `8f0344f` feat: add qwen30b distillation scripts and update tests
+- `2026-07-03` `94cadec` Fix auth metadata and tool call display
+- `2026-07-03` `6043652` feat:add openspec and test for small llm
+- `2026-07-03` `b599eab` fix: restore code to mergetool
+- `2026-07-04` `d86e067` feat: 更新用户分析功能
+- `2026-07-06` `3abaf5a` Revert "feat: 更新用户分析功能"
+- `2026-07-06` `d859863` Add GIS attachments and daily web logs
+- `2026-07-06` `7999689` Revert "feat: add user analysis dashboard exports"
+- `2026-07-07` `ea1b9ad` feat: add forced password reset flow
+- `2026-07-17` `a2d95fe` feat: add session file archive download
 
-**完善「Web 路由与双界面入口」**：根路径默认跳转到 `/gis/`，管理界面迁移到 `/manager/`，用户侧 GIS 页面和管理页分工更清晰。
-
-**新增「对话停止与会话持久化」**：支持停止生成、会话 SQLite 持久化、会话重连与流式快照恢复，长会话更可控。
-
-**补齐「管理与 GIS 工作台能力」**：新增 agent 预设持久化、会话重命名置顶、Web 管理界面、GIS 地图预览和文件浏览。
-
-#### 0.1.2
-
-**新增「思考过程转发控制」**：可选把 agent thinking 实时转发到微信，并保留终端调试输出。
-
-#### 0.1.1
-
-**优化「会话存活与输入反馈」**：默认空闲超时延长到 24 小时，并补齐 typing indicator 的开始与结束控制。
-
-#### 0.1.0
-
-**上线「基础微信 Agent 运行框架」**：支持微信扫码登录、按用户隔离 agent 会话、后台守护、配置文件和内置 agent 预设。
 
 ## skills/
 
 ### 本轮状态
 
-- 来源：`/home/maptex/Code/xcsmartdatabase/skills`
-- 检查方式：Git 提交记录 + 实际变更文件
-- 截至 2026-07-20 的结论：
-  - **本轮有新增条目**
-  - 最近一组更新集中在 `2026-07-20`
-  - 重点不是新增单个地图技能，而是收紧运行约束、补齐环境与打包链路
+- 来源：`/home/maptex/Code/xcsmartdatabase/skills` Git log
+- 统计区间：2026-06-10 至 2026-07-20
+- 本轮累计 `7` 条提交
+- 最近更新日期：`2026-07-20`
 
-### 2026-07-20
+### 提交列表
 
-#### `7956a68` `docs: declare proxy 7897 and code.maptex.top route`
-
-- 在 `agents/qoder/AGENTS.md` 中补写 Git 网络约定：
-  - Git 访问统一走 `proxy 7897`
-  - 远端默认走 `http://code.maptex.top`
-- 同步调整工作区级 `config` / `doc` 入口引用，减少多仓协作时的路由漂移
-
-#### `29ca6a0` `feat:update env`
-
-- 新增 `.env`，补齐地形、3D Tiles 自动发布和覆盖配置
-- 扩展 `docker-compose.yml`、`package.sh` 和打包模板，补齐部署入口
-- 新增并增强以下运行脚本：
-  - `scripts/package-templates/deploy.sh`
-  - `scripts/package-templates/refresh-agent-prompts.sh`
-  - `scripts/refresh-postgis-gateway.sh`
-  - `scripts/sync-skills-from-gitlab.sh`
-- 这组变更的直接意义是：
-  - 技能工作区的运行环境不再只靠人工约定
-  - 打包、部署、网关刷新和 skillpacks 同步有了更完整的脚本骨架
-
-#### `dfb4a47` `feat:update gitignore`
-
-- 调整 `.gitignore`
-- 目标是收敛工作区噪声，避免环境产物和无关文件持续进入版本控制视野
+- `2026-07-03` `29f6e6a` init version
+- `2026-07-07` `1d727d4` restore: recover top-level scripts directory
+- `2026-07-07` `a83a302` init version
+- `2026-07-07` `dd8aa9e` env: recover docker
+- `2026-07-20` `7956a68` docs: declare proxy 7897 and code.maptex.top route
+- `2026-07-20` `29ca6a0` feat:update env
+- `2026-07-20` `dfb4a47` feat:update gitignore

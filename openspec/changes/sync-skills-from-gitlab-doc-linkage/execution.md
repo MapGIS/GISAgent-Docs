@@ -25,8 +25,8 @@
 
 该文件固定汇总：
 
-- `openspec/changes/sync-skills-from-gitlab/clis-detailed-update-log.md`
-- `gisagent/CHANGELOG.md`
+- `/home/maptex/Code/xcsmartdatabase/clis/*` 下各子仓库 Git log
+- `/home/maptex/Code/xcsmartdatabase/gisagent` Git log
 - `/home/maptex/Code/xcsmartdatabase/skills` 仓库 Git 提交与实际文件变更
 
 ### 3. 导航接入
@@ -67,6 +67,14 @@
 - `/home/maptex/Code/xcsmartdatabase/skills` 的实际更新没有进入固定汇总边界
 
 因此本次补正将 `skills/` 工作区明确纳入统一汇总输入。
+
+### 8. 2026-07-20 自动化与 `gisagent` 来源修正
+
+进一步补正后确认：
+
+- `gisagent` 不应继续以 `CHANGELOG.md` 作为固定事实源
+- 当前更稳定的方案是与 `clis/`、`skills/` 一样，统一改为 Git log 来源
+- 新增 `doc/scripts/generate_skill_update.py`，用于按固定来源直接重写 `doc/update.md` 与 `docs/skills-detailed-update-log.mdx`
 
 ## 当前结果
 

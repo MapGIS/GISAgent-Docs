@@ -18,6 +18,8 @@
 2. `doc/docs/skills-detailed-update-log.mdx`
    - Mintlify 对外阅读页
    - 通过 `docs.json` 导航暴露
+3. `doc/scripts/generate_skill_update.py`
+   - 固定来源 Git 扫描与重写脚本
 
 ## 问题陈述
 
@@ -38,14 +40,16 @@
 
 1. 将这轮技能更新收敛为 1 个统一汇总稿 `doc/update.md`
 2. 将统一汇总稿镜像为 1 个 Mintlify 可访问页面 `doc/docs/skills-detailed-update-log.mdx`
-3. 在 `doc/docs.json` 中加入可访问入口
-4. 在 `doc/openspec/changes` 下记录这次联动关系
-5. 回链到原始 `openspec/changes/sync-skills-from-gitlab`
+3. 用脚本固化“固定来源 Git log -> 文档产物”流程
+4. 在 `doc/docs.json` 中加入可访问入口
+5. 在 `doc/openspec/changes` 下记录这次联动关系
+6. 回链到原始 `openspec/changes/sync-skills-from-gitlab`
 
 ## 范围内
 
 - `doc/update.md`
 - `doc/docs/skills-detailed-update-log.mdx`
+- `doc/scripts/generate_skill_update.py`
 - `doc/docs.json`
 - `doc/openspec/changes/sync-skills-from-gitlab-doc-linkage/*`
 - `doc/openspec/README.md`
@@ -60,9 +64,10 @@
 ## 成功标准
 
 1. `doc/update.md` 存在且明确标注固定来源
-2. `doc/update.md` 的固定来源明确包含 `clis/`、`gisagent/` 与 `skills/`
-3. 文档站存在 1 个新的技能迭代页面 `docs/skills-detailed-update-log.mdx`
-4. 页面为 Mintlify `.mdx` 格式
-5. `docs.json` 中存在可访问导航入口
-6. `doc/openspec/changes` 中存在本次联动 change
-7. 原始 openspec change 能回链到文档侧页面与联动 change
+2. `doc/update.md` 的固定来源明确包含 `clis/`、`gisagent/` 与 `skills/` Git log
+3. 存在可执行脚本重写 `doc/update.md` 与 `docs/skills-detailed-update-log.mdx`
+4. 文档站存在 1 个新的技能迭代页面 `docs/skills-detailed-update-log.mdx`
+5. 页面为 Mintlify `.mdx` 格式
+6. `docs.json` 中存在可访问导航入口
+7. `doc/openspec/changes` 中存在本次联动 change
+8. 原始 openspec change 能回链到文档侧页面与联动 change
