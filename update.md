@@ -2,8 +2,8 @@
 
 ## 汇总说明
 
-- 汇总日期：2026-07-20
-- 状态截止：2026-07-20
+- 汇总日期：2026-08-05
+- 状态截止：2026-08-05
 - 来源文件：
   - `/home/maptex/Code/xcsmartdatabase/clis` 下各子仓库 Git log
   - `/home/maptex/Code/xcsmartdatabase/gisagent` Git log
@@ -15,8 +15,8 @@
 
 ## 更新概览
 
-- **`clis/` 持续演进**：`5` 个子仓库新增 `65` 条提交，重点集中在 `postgis_service_cli、3dtiles_cli、knowledge_cli`。
-- **`gisagent/` 继续迭代**：累计 `34` 条提交，最近更新到 `2026-07-17`。
+- **`clis/` 持续演进**：`6` 个子仓库新增 `68` 条提交，重点集中在 `postgis_service_cli、3dtiles_cli、knowledge_cli`。
+- **`gisagent/` 继续迭代**：累计 `35` 条提交，最近更新到 `2026-07-22`。
 - **`skills/` 工作区继续收敛**：累计 `7` 条提交，最近更新到 `2026-07-20`。
 
 ---
@@ -26,14 +26,14 @@
 ### 本轮状态
 
 - 来源：`/home/maptex/Code/xcsmartdatabase/clis` 下各子仓库 Git log
-- 统计区间：2026-06-10 至 2026-07-20
-- 本轮共有 `5` 个子仓库发生更新，累计 `65` 条提交
+- 统计区间：2026-06-10 至 2026-08-05
+- 本轮共有 `6` 个子仓库发生更新，累计 `68` 条提交
 - 最近更新日期：`2026-07-20`
 - 重点仓库：`postgis_service_cli、3dtiles_cli、knowledge_cli`
 
 ### `knowledge_cli`
 
-- 提交数：`9`，区间：`2026-06-11` 至 `2026-07-20`
+- 提交数：`11`，区间：`2026-06-11` 至 `2026-08-04`
 - `2026-06-11` `4096016` feat: refine knowledge graph g6 rendering
 - `2026-06-14` `6e6c364` chore: sync workspace changes
 - `2026-06-14` `1fa1675` chore: sync workspace changes
@@ -43,11 +43,18 @@
 - `2026-07-06` `707d57d` ci: retry alpine package install
 - `2026-07-08` `3676308` feat:add nautical knowlidge
 - `2026-07-20` `779bd86` chore: sync local changes 2026-07-20
+- `2026-08-04` `d5922ab` Add GitLab CI pages and knowledge graph jobs
+- `2026-08-04` `302b03a` Harden nautical CI validation job
+
+### `mapgis67_cli`
+
+- 提交数：`2`，区间：`2026-07-29` 至 `2026-07-29`
+- `2026-07-29` `63821d0` Add MapGIS67 CLI writers and tests
+- `2026-07-29` `5fe3d22` Add specifications, skills, and support scripts
 
 ### `postgis_service_cli`
 
-- 提交数：`34`，区间：`2026-06-10` 至 `2026-07-20`
-- `2026-06-10` `61b5899` env:fix docker var
+- 提交数：`33`，区间：`2026-06-11` 至 `2026-07-20`
 - `2026-06-11` `f235ec9` Refine MapLibre gateway style guidance
 - `2026-06-11` `5b774a4` docs: update postgis service skill sprite path
 - `2026-06-16` `c55012f` Add 3D Tiles publishing and Cesium preview support
@@ -122,15 +129,12 @@
 ### 本轮状态
 
 - 来源：`/home/maptex/Code/xcsmartdatabase/gisagent` Git log
-- 统计区间：2026-06-10 至 2026-07-20
-- 本轮累计 `34` 条提交
-- 最近更新日期：`2026-07-17`
+- 统计区间：2026-06-10 至 2026-08-05
+- 本轮累计 `35` 条提交
+- 最近更新日期：`2026-07-22`
 
 ### 提交列表
 
-- `2026-06-10` `36a9f82` 分享社区时可以选择技能
-- `2026-06-10` `ab86583` fix: error url make error
-- `2026-06-10` `e3074db` fix: harden web server and sse runtime stability
 - `2026-06-11` `a578463` 收藏改成点赞
 - `2026-06-11` `d9857bb` Merge branch 'main' of http://code.maptex.top/xcsmartdatabase/gisagent
 - `2026-06-11` `1ac9c50` 优化对话和修改解绑逻辑
@@ -162,6 +166,10 @@
 - `2026-07-06` `7999689` Revert "feat: add user analysis dashboard exports"
 - `2026-07-07` `ea1b9ad` feat: add forced password reset flow
 - `2026-07-17` `a2d95fe` feat: add session file archive download
+- `2026-07-22` `04a339e` feat: add GIS Agent license enforcement and console
+- `2026-07-22` `8b0a354` chore: restore agent config
+- `2026-07-22` `607eb3d` chore: add license console signing keys
+- `2026-07-22` `3f95549` feat:update wechat
 
 
 ## skills/
@@ -169,7 +177,7 @@
 ### 本轮状态
 
 - 来源：`/home/maptex/Code/xcsmartdatabase/skills` Git log
-- 统计区间：2026-06-10 至 2026-07-20
+- 统计区间：2026-06-10 至 2026-08-05
 - 本轮累计 `7` 条提交
 - 最近更新日期：`2026-07-20`
 
