@@ -1,0 +1,204 @@
+---
+title: 添加自定义技能
+description: 在 GIS Agent（含离线部署）中新增一个自定义 SKILL 的完整教程：概念、两条生效链路、开发机步骤、离线目标机部署、验证与常见问题。
+---
+
+# 如何添加一个自定义技能（SKILL）
+
+本教程说明如何在 GIS Agent 中新增一个自定义技能，并让它在**技能市场**中可见、在**对话**中可被
+Agent 调用。适用于本机开发环境，也适用于**离线 / 内网部署**的目标机。
+
+阅读对象：需要给 GIS Agent 扩展新能力（新技能）的实施或开发人员。你不需要改任何构建脚本，
+绝大多数情况下只是"放一个文件夹 + 跑一条同步命令"。
+
+## 先理解：一个技能是什么
+
+一个技能（SKILL）就是仓库 `skillpacks/` 下的一个目录，目录里至少有一个 `SKILL.md`：
+
+```text
+skillpacks/
+└── my-custom-skill/
+    └── SKILL.md        # 必需：技能定义（frontmatter + 说明）
+```
+
+`SKILL.md` 顶部用 frontmatter 声明技能的 `name` 与 `description`：
+
+```markdown
+---
+name: my-custom-skill
+description: 一句话说明这个技能做什么、以及用户提到哪些关键词时应当使用它。
+---
+
+# My Custom Skill
+
+给 Agent 看的正文：何时使用、具体步骤、输出约定、边界。
+```
+
+- `name`：技能唯一标识，也是技能市场卡片的标题。用小写字母、数字、连字符。
+- `description`：Agent 判断"什么时候该用这个技能"的依据，务必写清**用途 + 触发场景**。
+- 正文：写给 Agent 的操作指引，越具体越稳定。技能可以引用同目录下的脚本、模板等文件。
+
+## 关键心智模型：两条独立链路
+
+新增技能时最容易踩的坑，是把"市场里看得见"和"对话里用得上"当成同一件事。它们是**两条独立
+链路**：
+
+| 目标 | 靠什么生效 | 前置条件 |
+| --- | --- | --- |
+| ① 技能市场可见 | 技能文件同步进运行卷 `/workspace/skills`（系统递归扫描 `SKILL.md`） | 已登录 + 授权包含 `skills_basic` 模块 |
+| ② Agent 对话可调用 | 在 `config/opencode/opencode.json` 的 `skills.paths` 登记该目录 | 重新打包部署 + 重建运行实例 + 新建会话 |
+
+一句话结论：
+
+> **只要文件进了卷，技能市场就能看到；要让 Agent 在对话里真正用上它，还需要登记 `skills.paths`。**
+
+## 步骤一：在开发机（仓库）里创建技能
+
+### 1. 建目录与 `SKILL.md`
+
+在仓库根 `skillpacks/` 下新建技能目录，例如 `skillpacks/mapgis-custom-skill/`，写入 `SKILL.md`：
+
+```markdown
+---
+name: mapgis-custom-skill
+description: MapGIS 自定义示例技能，用于验证离线技能市场与 agent 技能加载链路是否生效。当用户提到 mapgis-custom-skill、自定义技能、或要求确认技能市场显示时使用；被调用时回显标记 MAPGIS_CUSTOM_OK 并简述其用途，无业务副作用。
+---
+
+# MapGIS Custom Skill（自定义示例技能）
+
+用于验证 GIS Agent 离线部署下的技能扩展链路：技能市场可见 + agent 可加载调用。
+
+## 行为
+
+被调用时，原样回显标记串 `MAPGIS_CUSTOM_OK`，并说明"该技能来自 MapGIS 自定义技能扩展验证"。
+本技能不读写业务数据、不产生副作用。
+```
+
+`mapgis-custom-skill` 是官方保留的参考实现，你可以直接复制这个目录改造成自己的技能。
+
+### 2. 登记到 `skills.paths`（仅"对话可调用"需要）
+
+编辑 `config/opencode/opencode.json`，在 `skills.paths` 数组追加一行：
+
+```json
+{
+  "skills": {
+    "paths": [
+      "/workspace/skills/postgis-cli",
+      "...其它已有技能...",
+      "/workspace/skills/mapgis-custom-skill"
+    ]
+  }
+}
+```
+
+> 路径是**容器内路径**，固定以 `/workspace/skills/<技能目录名>` 开头，目录名要和第 1 步一致。
+> 如果只需要技能市场显示、不需要对话调用，这一步可以省略。
+
+### 3. 本机快速验证（可选）
+
+如果你在本机跑着开发栈，不用重启服务就能确认 Agent 侧能否发现：
+
+```bash
+# 进入 opencode agent 容器
+docker exec agent-opencode sh -lc 'cd /workspace && opencode debug skill'
+```
+
+在输出里能看到你的技能 `name` 与 `location`，说明 `skills.paths` 登记成功。
+
+## 步骤二：部署到目标机
+
+有两种方式，按需选择。
+
+### 方式 A：重新打包 offline bundle 再部署（推荐，交付用）
+
+在开发机改完第 1、2 步后，直接重新打包。`package.sh` 会：
+
+- 把 `skillpacks/` 整个目录**原样**拷进 bundle（**不需要改 `package.sh`**，新技能自动进包）；
+- 把 `opencode.json` 的 `skills.paths` / `mcp` 同步进运行配置，供 Agent 读取。
+
+```bash
+# 仓库根执行
+./package.sh
+# 然后把生成的 bundle 拷贝到目标机，按离线部署手册正常 deploy
+```
+
+### 方式 B：在已部署的目标机上就地添加（调试 / 增量交付）
+
+适合目标机已经跑起来、只想快速加一个技能。技能市场显示（链路①）**只需做完前三步**。
+
+在目标机的 bundle 目录下执行：
+
+```bash
+cd /opt/gisagent/<你的-bundle-目录>      # 即 GISAGENT_HOST_BUNDLE_ROOT 指向的目录
+
+# 1) 放入技能文件（直接创建，不要用批量替换脚本，避免误伤同名文件）
+mkdir -p skillpacks/mapgis-custom-skill
+cat > skillpacks/mapgis-custom-skill/SKILL.md <<'EOF'
+---
+name: mapgis-custom-skill
+description: MapGIS 自定义示例技能，用于验证离线技能市场与 agent 技能加载链路是否生效。当用户提到 mapgis-custom-skill、自定义技能、或要求确认技能市场显示时使用；被调用时回显标记 MAPGIS_CUSTOM_OK 并简述其用途，无业务副作用。
+---
+
+# MapGIS Custom Skill（自定义示例技能）
+
+被调用时原样回显 `MAPGIS_CUSTOM_OK`，说明"该技能来自 MapGIS 自定义技能扩展验证"，无业务副作用。
+EOF
+
+# 2) 同步进只读运行卷（skillpacks-sync 会从 ./skillpacks 全量重建卷，内置技能仍在源目录，安全）
+docker compose run --rm skillpacks-sync
+
+# 3) 确认文件已经进卷
+docker exec mapgis-ai-gisagent sh -lc 'ls -l /workspace/skills/mapgis-custom-skill/SKILL.md'
+```
+
+到这里，**刷新一次技能市场页面就能看到新技能**（链路①完成）。
+
+若还要让 Agent 在对话里用上它（链路②），继续第 4 步登记 `skills.paths`：
+
+```bash
+# 4) 编辑 bundle 内 config/opencode/opencode.json，在 skills.paths 追加
+#    "/workspace/skills/mapgis-custom-skill"
+#    然后重启 gisagent、重建该用户的运行实例、新建会话
+docker compose restart gisagent
+```
+
+> 生效顺序固定为：**改配置 → 重启 gisagent → 重建该用户运行实例 → 新建会话**。旧会话会缓存
+> 技能快照，务必用新会话验证。
+
+## 步骤三：验证结果
+
+- **技能市场**：刷新页面，应能看到技能卡片（标题即 `SKILL.md` 里的 `name`）。
+- **命令行核对**：
+  ```bash
+  docker exec mapgis-ai-gisagent sh -lc 'ls /workspace/skills'
+  ```
+- **Agent 调用**：新建会话，用 `description` 里的触发场景提问，确认 Agent 能加载并执行。
+
+## 常见问题
+
+**技能市场整片空白，连内置技能都没有？**
+这通常不是你的技能没部署，而是**授权缺少 `skills_basic` 模块**：技能市场接口需要登录且校验该
+授权模块，未授权时返回空列表且不报错。请检查目标机授权是否包含"技能"能力。
+
+**市场能看到，但对话里 Agent 不用它？**
+说明只完成了链路①。请确认已在 `skills.paths` 登记、并按"重启 gisagent → 重建运行实例 → 新建
+会话"的顺序生效；用新会话再试。
+
+**改了 `opencode.json` 但没生效？**
+运行配置由打包阶段的同步逻辑从 `opencode.json` 生成到 `OPENCODE_CONFIG_CONTENT`，必须重新打包
+（方式 A）或在目标机改运行配置并重启（方式 B）才会被读到。
+
+**技能需要联网（调用公网 API）？**
+纯离线 / 局域网环境下不可用。此类依赖需在离线部署手册里明确标注，不能默认算作离线可用能力。
+
+**技能想带独立存储 / 特殊挂载？**
+少数内置技能（如 `ui-ux-pro-max`、`geology-knowledge`）使用独立 volume 与独立同步服务。新技能
+一般走默认的 `skillpacks-volume` 即可；确需独立 volume 时参见下方设计规范。
+
+## 下一步
+
+- 需要扩展 **MCP（Model Context Protocol）服务**、独立 volume、联网判定等更复杂场景，参考工程
+  规范文档 `openspecs/changes/docker-skill-mcp-extension/`（含可扩展的"验证台账 / 场景用例"）。
+- 技能与运行期整体架构：参见 [技能详细更新日志](/docs/skills-detailed-update-log) 与
+  [使用技巧](/docs/usage-tips)。
