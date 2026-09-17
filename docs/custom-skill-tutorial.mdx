@@ -95,16 +95,28 @@ description: MapGIS 自定义示例技能，用于验证离线技能市场与 ag
 > 路径是**容器内路径**，固定以 `/workspace/skills/<技能目录名>` 开头，目录名要和第 1 步一致。
 > 如果只需要技能市场显示、不需要对话调用，这一步可以省略。
 
-### 3. 本机快速验证（可选）
-
-如果你在本机跑着开发栈，不用重启服务就能确认 Agent 侧能否发现：
+### 3. 本机快速验证（可选，免重打包）
 
 ```bash
-# 进入 opencode agent 容器
 docker exec agent-opencode sh -lc 'cd /workspace && opencode debug skill'
 ```
 
-在输出里能看到你的技能 `name` 与 `location`，说明 `skills.paths` 登记成功。
+在输出里能看到你的技能 `name` 与 `location`，说明 agent 侧已发现它。
+
+关于"读的是哪份配置"（重要，实测确认）：`opencode debug skill` 与 `opencode mcp list` 读的是
+**运行容器里当前生效的 opencode 配置**——容器内全局 `~/.config/opencode/opencode.json`，并与
+`OPENCODE_CONFIG_CONTENT` 合并；它**不直接读仓库的 `config/opencode/opencode.json`**。
+
+- 第 2 步改仓库文件是**交付路径**：要经"重新打包 → 重启 gisagent → 重建运行实例"才进聊天。
+- 想**免重打包**快速核对，把技能目录临时加进容器生效的 `skills.paths`，再验证：
+
+  ```bash
+  docker exec agent-opencode python3 -c 'import json,io; p="/home/agent/.config/opencode/opencode.json"; d=json.load(open(p)); ps=d.setdefault("skills",{}).setdefault("paths",[]); [ps.append("/workspace/skills/mapgis-custom-skill") for x in [0] if "/workspace/skills/mapgis-custom-skill" not in ps]; json.dump(d,open(p,"w"))'
+  docker exec agent-opencode sh -lc 'cd /workspace && opencode debug skill'
+  ```
+
+  验证后可把这条临时路径从容器配置里删掉；正式生效仍以改仓库 `config/opencode/opencode.json`
+  并重打包为准。
 
 ## 步骤二：部署到目标机
 

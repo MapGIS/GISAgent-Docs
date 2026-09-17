@@ -40,7 +40,8 @@
           {
             "group": "扩展开发",
             "pages": [
-              "docs/custom-skill-tutorial"
+              "docs/custom-skill-tutorial",
+              "docs/custom-mcp-tutorial"
             ]
           },
           {

@@ -1,0 +1,222 @@
+---
+title: 添加自定义 MCP
+description: 在 GIS Agent（含离线部署）中新增一个自定义 MCP（Model Context Protocol）服务的教程：remote HTTP 与 local/stdio 两种形态、镜像内置、端口预留、opencode.json 与各 CLI settings.json 登记、secret 卫生、离线部署与验证。
+---
+
+# 如何添加一个自定义 MCP 服务
+
+MCP（Model Context Protocol）给 Agent 挂载"工具 / 数据源"。本教程说明如何在 GIS Agent 中新增
+一个自定义 MCP，适用于本机开发环境与**离线 / 内网**部署。
+
+与[添加自定义技能](/docs/custom-skill-tutorial)不同，MCP 的生效面更窄也更专：它只影响 Agent
+工具列表，**没有"技能市场"那种文件遍历展示**。所以理解 MCP 只需要抓住一条链路——
+"登记 → 打包同步 → 运行实例读取"。
+
+## 先选择形态
+
+GIS Agent 支持两种 MCP，按需选一种：
+
+| 形态 | 典型例子 | 运行方式 | 何时用 |
+| --- | --- | --- | --- |
+| **remote HTTP** | 内置的 `knowledgecli` | 独立容器/服务，通过 `http://<服务>:<端口>/mcp` 访问 | 有服务端、需常驻、可多 Agent 共享 |
+| **local / stdio** | 内置的 `personal-knowledge-mcp` | 打进包、以标准输入输出在 Agent 容器内本地拉起 | 单文件/轻量、随进程起、不需要网络端口 |
+
+> 下面以内置的 `knowledgecli`（remote）作为参照实现讲解。你新增自己的 MCP 时，把 `knowledgecli`
+> 换成你自己的 id（如 `my-weather-mcp`）、把服务与端口换成你自己的即可。
+
+## 关键约束（离线部署）
+
+- **镜像必须内置**：remote MCP 的服务镜像要加入 `package.sh` 的镜像清单，被 `docker save` 导出、
+  目标机 `docker load`，**运行期零公网**（内网机器拉不到 registry）。
+- **端口预留**：新增 remote MCP 的内部端口不得与既有端口冲突——
+  `17076`（GISAgent）、`17072`（数据库）、`18081`、`18088`（knowledge MCP）、`19081`、`3333`（Gateway）、
+  `17077`（文档站）。选一个未占用的内部端口即可，通常**只需内部网络可达**，不必对外发布。
+- **secret 卫生**：MCP 若需鉴权 key，一律走 `config/local/secrets/<ENV_KEY>`（file 后端）或 ASE，
+  在配置里用 `${env.X}` 引用，**绝不写死**进目录 / 镜像 / 文档；并纳入 `verify-no-secret-literals.sh`
+  扫描。
+- **多 CLI 对齐**：Agent 侧除了 OpenCode，还有 `.claude` / `.qwen` / `.qoder` 各自的
+  `settings.json`。新 MCP 需在 `opencode.json` 与各 CLI 的 `mcpServers` 里都登记，指向同一服务，
+  否则换 Agent 内核时工具不一致。
+
+## MCP 生效链路（一条）
+
+```text
+MCP 服务（remote 镜像 / stdio npm 包）
+  └─ package.sh：镜像进清单导出 docker save / stdio 包 copy_tree_contents_excluding + sanitize
+       └─ Compose：remote 起独立服务（内网端口）/ stdio 挂载进 agent 容器
+            └─ config/opencode/opencode.json  mcp.<id>
+                 └─ rewrite_staged_agent_model_config → OPENCODE_CONFIG_CONTENT.mcp
+                      └─ ACP 运行实例实时读取（对话内可见该 MCP 的工具）
+            └─ 各 CLI settings.json 的 mcpServers 指向同一服务（.claude/.qwen/.qoder）
+```
+
+要点：任何 `opencode.json` 的 `mcp` 变更，只有被 `rewrite_staged_agent_model_config` 同步进
+`OPENCODE_CONFIG_CONTENT` 才会被运行实例读到；**不经过它就改了不生效**。
+
+---
+
+## 形态一：新增一个 remote HTTP MCP（推荐路径）
+
+参照内置 `knowledgecli`：`opencode.json` 里就是
+
+```json
+{ "mcp": { "knowledgecli": { "type": "remote", "url": "http://knowledge-mcp-http:18088/mcp", "enabled": true } } }
+```
+
+对应 Compose 有 `knowledge-mcp-http` 服务（镜像 `knowledge-mcp-http:latest`、内部端口 `18088`、
+健康检查 `/health`）。你新增自己的 remote MCP，按下面 6 步：
+
+### 1. 备好 MCP 服务镜像
+
+用一个能对外暴露 `http://<host>:<port>/mcp` 的服务，自带镜像或写一个 `Dockerfile`。
+
+### 2. 在 `docker-compose.yml` 加服务
+
+```yaml
+  my-weather-mcp:
+    image: my-weather-mcp:latest
+    build:
+      context: ./mcps/my-weather-mcp        # 你的源码目录
+      dockerfile: Dockerfile
+    container_name: my-weather-mcp
+    restart: unless-stopped
+    ports:
+      - "18090:18090"                        # 预留段内、不与上表冲突
+    networks:
+      - gisagent-network                     # 与其它服务同内网即可，不必对外发布
+    environment:
+      - MCP_HTTP_PORT=18090
+      - MCP_HTTP_HOST=0.0.0.0
+      - MY_MCP_API_KEY=${env.MY_MCP_API_KEY} # 需要鉴权时用 env 引用，不写死
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:18090/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+```
+
+> 若源目录路径可能需要可移植（离线 bundle 用相对路径），在 `package.sh` 的
+> `generate_portable_compose` 替换表里，把宿主机绝对路径改写成 bundle 相对路径（参照 knowledge
+> 的写法）。
+
+### 3. 让镜像离线内置
+
+把 `my-weather-mcp:latest` 加入 `package.sh` 顶部镜像清单（与 `knowledge-mcp-http:latest` 同列），
+`./package.sh` 时会 `docker save` 进 bundle，目标机 `docker load`。
+
+### 4. 在 `opencode.json` 登记
+
+编辑 `config/opencode/opencode.json`，在 `mcp` 下新增一项：
+
+```json
+{
+  "mcp": {
+    "knowledgecli": { "type": "remote", "url": "http://knowledge-mcp-http:18088/mcp", "enabled": true },
+    "my-weather-mcp": { "type": "remote", "url": "http://my-weather-mcp:18090/mcp", "enabled": true }
+  }
+}
+```
+
+`url` 用**服务名 + 内部端口**（Docker 内网解析），不是 `localhost`。
+
+### 5. 对齐各 CLI 的 `mcpServers`
+
+在 `package.sh` 重写 `.claude` / `.qwen` / `.qoder` 的 `settings.json` 的段落里，为 `my-weather-mcp`
+增加同名 server，指向同一内部 URL（照 `knowledgecli` 现有写法复制一份）。这样换用 Claude / Qwen /
+Qoder 内核时也能看到该工具。
+
+### 6. 打包并生效
+
+```bash
+./package.sh          # 同步 opencode.json 的 mcp → OPENCODE_CONFIG_CONTENT，导出镜像
+# 目标机部署后：重启 gisagent → 重建该用户运行实例 → 新建会话
+```
+
+---
+
+## 形态二：新增一个 local / stdio MCP
+
+参照内置 `personal-knowledge-mcp`（`opencode.json` 里以本地 stdio 拉起）。复用它的打包范式：
+
+1. 用 `package.sh` 的 `copy_tree_contents_excluding` 把 npm 包拷进 bundle（默认去掉
+   `.git` / `node_modules` / `target`；确需 vendor `node_modules` 时再放行）。
+2. 写一个 sanitize 步骤（照 `sanitize_staged_personal_knowledge`）：清空运行期数据 / 索引、
+   生成 portable `config.json`、`chmod` 收紧、确保运行 UID（`1001`）可读其运行目录。
+3. Compose 把该目录只读挂进 `agent-*`（例如 `./personal-knowledge-mcp:/opt/mcp/<name>:ro`），
+   以 stdio 命令启动。
+4. 在 `config/opencode/opencode.json` 的 `mcp.<id>` 登记本地 / stdio 形态，并在各 CLI
+   `mcpServers` 里对齐；纳入 `verify-no-secret-literals.sh` 扫描。
+
+stdio 形态无需内网端口，也就不涉及端口预留冲突，但同样要遵守镜像 / 依赖离线内置与 secret 卫生。
+
+---
+
+## 目标机就地添加（调试 / 增量，已部署环境）
+
+若目标机已在运行、只想快速挂一个 remote MCP 验证，可不必重打包：
+
+```bash
+cd /opt/gisagent/<你的-bundle-目录>
+
+# 1) 载入服务镜像（若有）
+docker load -i images/your-mcp.tar
+
+# 2) 起服务（bundle 的 compose 已含该服务时）
+docker compose up -d my-weather-mcp
+
+# 3) 从 gisagent 容器网络确认服务可达（端口换成你的；gisagent 镜像里有 curl，没有 wget）
+docker exec mapgis-ai-gisagent sh -lc 'curl -s -o /dev/null -w "http_code=%{http_code}\n" http://my-weather-mcp:18090/health'
+
+# 4) 在 bundle 的 config/opencode/opencode.json 的 mcp 下登记 my-weather-mcp，
+#    并同步各 CLI settings.json 的 mcpServers；然后重启 gisagent
+docker compose restart gisagent
+```
+
+> 就地改的 `opencode.json` 需要在下次 `package.sh` 前保留，否则会被正式打包流程覆盖；正式交付
+> 仍以"改仓库 → 重打包"（形态一 第 6 步）为准。
+
+## 验证结果
+
+- **本机快速验证**（看运行实例到底加载了哪些 MCP）：
+
+  ```bash
+  docker exec agent-opencode sh -lc 'cd /workspace && opencode mcp list'
+  ```
+
+  每个服务会带 `connected` / 失败状态。注意 `opencode` 读的是**运行实例当前生效的配置**：聊天 ACP
+  的 `mcp` 来自 `OPENCODE_CONFIG_CONTENT`（由 gisagent 从挂载目录注入，会与全局
+  `~/.config/opencode/opencode.json` 合并）。因此只改仓库 `config/opencode/opencode.json` 不会立刻
+  反映到这条命令——要经"重新打包 → 重启 gisagent → 重建运行实例"；只想快速核对，可临时
+  `OPENCODE_CONFIG_CONTENT='{...}' opencode mcp list` 或直接改容器内生效配置。
+
+- **服务健康**（从 gisagent 容器网络）：`curl -s -o /dev/null -w "%{http_code}\n" http://<mcp服务名>:<内部端口>/health`
+  返回 `200`（gisagent 镜像里有 `curl`，没有 `wget`）。
+- **对话可见**：**新建会话**（旧会话缓存工具快照），向 Agent 询问它有哪些工具或直接触发该 MCP 能力。
+
+## 常见问题
+
+**服务起了，但 Agent 里看不到工具？**
+确认 `opencode.json` 的 `mcp.<id>` 已登记、并经 `package.sh` 同步进 `OPENCODE_CONFIG_CONTENT`；
+再确认已"重启 gisagent → 重建运行实例 → 新建会话"。就地改目录不重打包时，运行实例可能没读到新配置。
+
+**目标机拉不到镜像（connection refused）？**
+离线机器没有 registry 访问。remote MCP 镜像必须先加入 `package.sh` 镜像清单被 `docker save` 导出，
+部署时 `docker load`；运行期不联网。
+
+**端口起不来 / 服务不健康？**
+检查端口是否在预留段内、有无冲突（对照上文端口清单），以及 `url` 用的是服务名+内部端口而非
+`localhost`（跨容器要用服务名）。
+
+**换了 Claude / Qwen 内核后工具没了？**
+只在 `opencode.json` 登记不够，还要在各 CLI 的 `settings.json` `mcpServers` 里对齐同一服务。
+
+**MCP 需要密钥？**
+走 `config/local/secrets/<ENV_KEY>` 或 ASE，用 `${env.X}` 引用，绝不写死；纳入
+`verify-no-secret-literals.sh`。
+
+## 下一步
+
+- 想扩展技能而非工具：阅读[如何添加自定义技能](/docs/custom-skill-tutorial)。
+- 独立 volume、联网判定等更复杂扩展场景：参考工程规范
+  `openspecs/changes/docker-skill-mcp-extension/`（含"验证台账 / 场景用例"）。
