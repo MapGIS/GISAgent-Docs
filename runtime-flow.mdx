@@ -35,9 +35,9 @@ description: "当前系统中请求与 GIS 执行链路的流转方式"
 
 `agent-qoder` 与 `claude` / `qwen-code` 在技能发现机制上不同：
 
-- `qodercli --acp` 不会仅凭 `/workspace/skills` 自动发现 `skillpacks`
-- 当前有效方式是在 runtime 启动时把 `skillpacks` 增量平铺到 `~/.qoder/skills`
-- 这是保留原有 `.qoder` 内容基础上的追加，不是覆盖
+- `qoderclicn --acp`（`@qodercn-ai/qoderclicn`）不会仅凭 `/workspace/skills` 自动发现 `skillpacks`
+- 当前有效方式是在 runtime 启动时把 `skillpacks` 增量平铺到 `~/.qoder-cn/skills`
+- 这是保留原有 `.qoder-cn` 内容基础上的追加，不是覆盖
 - 因为 ACP 协议走 `stdout`，启动日志必须输出到 `stderr`
 
 ## 最重要的边界

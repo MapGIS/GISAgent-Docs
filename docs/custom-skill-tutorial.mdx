@@ -54,27 +54,43 @@ description: 一句话说明这个技能做什么、以及用户提到哪些关�
 
 ## 步骤一：在开发机（仓库）里创建技能
 
-### 1. 建目录与 `SKILL.md`
+### 1. 从模板工程开始（推荐）
 
-在仓库根 `skillpacks/` 下新建技能目录，例如 `skillpacks/mapgis-custom-skill/`，写入 `SKILL.md`：
+官方在 `gisagent/custom/skill/hello-gis/` 提供了一个**最小但完整的 SKILL 模板工程**，包含：
+
+- `SKILL.md`：frontmatter + 触发词 + 调用行为
+- `scripts/hello.sh`：辅助脚本（演示 SKILL 如何引用目录内文件）
+- `README.md`：说明与改造建议
+
+你可以直接复制这个目录改造成自己的技能：
+
+```bash
+# 复制模板工程
+cp -a gisagent/custom/skill/hello-gis skillpacks/my-custom-skill
+
+# 编辑 SKILL.md，修改 name、description、行为
+vim skillpacks/my-custom-skill/SKILL.md
+```
+
+`SKILL.md` 顶部用 frontmatter 声明技能的 `name` 与 `description`：
 
 ```markdown
 ---
-name: mapgis-custom-skill
-description: MapGIS 自定义示例技能，用于验证离线技能市场与 agent 技能加载链路是否生效。当用户提到 mapgis-custom-skill、自定义技能、或要求确认技能市场显示时使用；被调用时回显标记 MAPGIS_CUSTOM_OK 并简述其用途，无业务副作用。
+name: my-custom-skill
+description: 一句话说明这个技能做什么、以及用户提到哪些关键词时应当使用它。
 ---
 
-# MapGIS Custom Skill（自定义示例技能）
+# My Custom Skill
 
-用于验证 GIS Agent 离线部署下的技能扩展链路：技能市场可见 + agent 可加载调用。
-
-## 行为
-
-被调用时，原样回显标记串 `MAPGIS_CUSTOM_OK`，并说明"该技能来自 MapGIS 自定义技能扩展验证"。
-本技能不读写业务数据、不产生副作用。
+给 Agent 看的正文：何时使用、具体步骤、输出约定、边界。
 ```
 
-`mapgis-custom-skill` 是官方保留的参考实现，你可以直接复制这个目录改造成自己的技能。
+- `name`：技能唯一标识，也是技能市场卡片的标题。用小写字母、数字、连字符。
+- `description`：Agent 判断"什么时候该用这个技能"的依据，务必写清**用途 + 触发场景**。
+- 正文：写给 Agent 的操作指引，越具体越稳定。技能可以引用同目录下的脚本、模板等文件。
+
+> **参考实现**：`skillpacks/mapgis-custom-skill/` 是另一个常驻参考（纯 `SKILL.md` 无脚本版本），
+> `skillpacks/hello-gis/` 是带辅助脚本的版本。两者都可用于验证扩展链路。
 
 ### 2. 登记到 `skills.paths`（仅"对话可调用"需要）
 
@@ -86,7 +102,7 @@ description: MapGIS 自定义示例技能，用于验证离线技能市场与 ag
     "paths": [
       "/workspace/skills/postgis-cli",
       "...其它已有技能...",
-      "/workspace/skills/mapgis-custom-skill"
+      "/workspace/skills/hello-gis"
     ]
   }
 }
@@ -111,7 +127,7 @@ docker exec agent-opencode sh -lc 'cd /workspace && opencode debug skill'
 - 想**免重打包**快速核对，把技能目录临时加进容器生效的 `skills.paths`，再验证：
 
   ```bash
-  docker exec agent-opencode python3 -c 'import json,io; p="/home/agent/.config/opencode/opencode.json"; d=json.load(open(p)); ps=d.setdefault("skills",{}).setdefault("paths",[]); [ps.append("/workspace/skills/mapgis-custom-skill") for x in [0] if "/workspace/skills/mapgis-custom-skill" not in ps]; json.dump(d,open(p,"w"))'
+  docker exec agent-opencode python3 -c 'import json,io; p="/home/agent/.config/opencode/opencode.json"; d=json.load(open(p)); ps=d.setdefault("skills",{}).setdefault("paths",[]); [ps.append("/workspace/skills/hello-gis") for x in [0] if "/workspace/skills/hello-gis" not in ps]; json.dump(d,open(p,"w"))'
   docker exec agent-opencode sh -lc 'cd /workspace && opencode debug skill'
   ```
 
@@ -145,23 +161,57 @@ docker exec agent-opencode sh -lc 'cd /workspace && opencode debug skill'
 cd /opt/gisagent/<你的-bundle-目录>      # 即 GISAGENT_HOST_BUNDLE_ROOT 指向的目录
 
 # 1) 放入技能文件（直接创建，不要用批量替换脚本，避免误伤同名文件）
-mkdir -p skillpacks/mapgis-custom-skill
-cat > skillpacks/mapgis-custom-skill/SKILL.md <<'EOF'
+mkdir -p skillpacks/hello-gis
+cat > skillpacks/hello-gis/SKILL.md <<'EOF'
 ---
-name: mapgis-custom-skill
-description: MapGIS 自定义示例技能，用于验证离线技能市场与 agent 技能加载链路是否生效。当用户提到 mapgis-custom-skill、自定义技能、或要求确认技能市场显示时使用；被调用时回显标记 MAPGIS_CUSTOM_OK 并简述其用途，无业务副作用。
+name: hello-gis
+description: GIS 问候技能模板。当用户提到 hello-gis、自定义技能、或要求确认技能扩展链路时使用；被调用时运行辅助脚本回显标记 HELLO_GIS_OK 并简述其用途，无业务副作用。
 ---
 
-# MapGIS Custom Skill（自定义示例技能）
+# Hello GIS Skill（GIS 问候技能模板）
 
-被调用时原样回显 `MAPGIS_CUSTOM_OK`，说明"该技能来自 MapGIS 自定义技能扩展验证"，无业务副作用。
+用于验证 GISAgent 离线部署下的技能扩展链路：技能市场可见 + agent 可加载调用。
+
+## 何时使用
+
+- 用户提到 `hello-gis` 或"自定义技能"
+- 需要确认技能市场 / agent 技能加载是否生效
+- 演示 SKILL 如何引用目录内辅助脚本
+
+## 行为
+
+被调用时，运行本目录下的 `scripts/hello.sh` 脚本（传入调用者名字），原样回显标记串
+`HELLO_GIS_OK`，并说明"该技能来自 hello-gis 自定义技能扩展验证"。
+本技能不读写业务数据、不产生副作用。
+
+## 辅助脚本
+
+- `scripts/hello.sh <name>`：输出一行 `HELLO_GIS_OK · name=<name> · ts=<ISO8601>`，
+  用于验证 SKILL 可以引用目录内文件并执行 shell 命令。
 EOF
+
+# 可选：放入辅助脚本
+mkdir -p skillpacks/hello-gis/scripts
+cat > skillpacks/hello-gis/scripts/hello.sh <<'EOF'
+#!/usr/bin/env bash
+# hello-gis 辅助脚本
+# 用法: ./hello.sh [name]
+# 输出: HELLO_GIS_OK · name=<name> · ts=<ISO8601>
+
+set -euo pipefail
+
+NAME="${1:-GIS}"
+TS="$(date -Iseconds)"
+
+printf 'HELLO_GIS_OK · name=%s · ts=%s · 该技能来自 hello-gis 自定义技能扩展验证。\n' "$NAME" "$TS"
+EOF
+chmod +x skillpacks/hello-gis/scripts/hello.sh
 
 # 2) 同步进只读运行卷（skillpacks-sync 会从 ./skillpacks 全量重建卷，内置技能仍在源目录，安全）
 docker compose run --rm skillpacks-sync
 
 # 3) 确认文件已经进卷
-docker exec mapgis-ai-gisagent sh -lc 'ls -l /workspace/skills/mapgis-custom-skill/SKILL.md'
+docker exec mapgis-ai-gisagent sh -lc 'ls -l /workspace/skills/hello-gis/SKILL.md'
 ```
 
 到这里，**刷新一次技能市场页面就能看到新技能**（链路①完成）。
@@ -170,7 +220,7 @@ docker exec mapgis-ai-gisagent sh -lc 'ls -l /workspace/skills/mapgis-custom-ski
 
 ```bash
 # 4) 编辑 bundle 内 config/opencode/opencode.json，在 skills.paths 追加
-#    "/workspace/skills/mapgis-custom-skill"
+#    "/workspace/skills/hello-gis"
 #    然后重启 gisagent、重建该用户的运行实例、新建会话
 docker compose restart gisagent
 ```
@@ -200,6 +250,13 @@ docker compose restart gisagent
 **改了 `opencode.json` 但没生效？**
 运行配置由打包阶段的同步逻辑从 `opencode.json` 生成到 `OPENCODE_CONFIG_CONTENT`，必须重新打包
 （方式 A）或在目标机改运行配置并重启（方式 B）才会被读到。
+
+**`opencode debug skill` 能看到技能，但 Web UI 聊天里 Agent 不用它？**
+Web UI 每个会话启动**临时容器**，其 `OPENCODE_CONFIG_CONTENT` 来自 gisagent 挂载的
+`config/local/agent.local-*.json`（→ `/workspace/config/agent.json`），**不是**仓库的
+`config/opencode/opencode.json`。开发机修复：更新 `agent.local-*.json` 的
+`OPENCODE_CONFIG_CONTENT`（加入新技能路径），然后 `docker compose restart gisagent`，
+再新建会话。
 
 **技能需要联网（调用公网 API）？**
 纯离线 / 局域网环境下不可用。此类依赖需在离线部署手册里明确标注，不能默认算作离线可用能力。
