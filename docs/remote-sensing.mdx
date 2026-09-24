@@ -1,0 +1,122 @@
+---
+title: 遥感影像
+---
+
+# 遥感影像
+
+> 遥感数据的标准流程是  上传数据 => 入库 => 发服务 => 前端显示
+> 成败的关键在数据的质量与校验上
+
+## 人工前置
+
+这一步的数据如果用户提前校验后,后面的AI自动处理会很顺利
+
+### 数据
+
+用户提供了 相同区域的 2个不同年份的数据如下所示:
+
+1. 2025年度.tif
+2. 2026上半年.tif
+
+#### 有效性
+
+下面2种方式是等效的
+
+1. 直接 gdalinfo xxx.tif
+2. MapGIS Desktop 10 打开
+
+
+#### 1. 空间参考系
+
+2025年度.tif的空间信息如下
+
+| 数据           | GDAL                                     | MapGIS 10                                    |
+| :------------- | :--------------------------------------- | :------------------------------------------- |
+| 2025年度.tif   | ![gdal_info_1](/docs/remote-sensing-assets/gdal_info_1.png) | ![mapgis_info_1](/docs/remote-sensing-assets/mapgis_info_1.png) |
+| 2026上半年.tif | ![gdal_info_2](/docs/remote-sensing-assets/gdal_info_2.png) | ![mapgis_info_2](/docs/remote-sensing-assets/mapgis_info_2.png) |
+
+1. 我们可以看见 2025年度.tif 识别的是 unnamed  `未命名`
+2. 我们可以看见 2026上半年.tif 识别的是 CGCS_2000_3_Degree_GK_Zone_39 `中国2000坐标3度带39`
+
+#### 2. 空间范围
+
+| 数据           | GDAL                                   | MapGIS 10                                  |
+| :------------- | :------------------------------------- | :----------------------------------------- |
+| 2025年度.tif   | ![gdal_box_1](/docs/remote-sensing-assets/gdal_box_1.png) | ![mapgis_box_1](/docs/remote-sensing-assets/mapgis_box_1.png) |
+| 2026上半年.tif | ![gdal_box_2](/docs/remote-sensing-assets/gdal_box_2.png) | ![mapgis_box_2](/docs/remote-sensing-assets/mapgis_box_2.png) |
+
+> 核心可以发现是坐标系没有对齐,  空间范围是一致的,但是空间坐标系没有对齐, 在这个场景下应该是把 2025年度的空间参考系修改成 CGCS_2000_3_Degree_GK_Zone_39 `中国2000坐标3度带39`
+
+
+#### 有成熟的MapGIS产品体系
+
+1. 改变参考系
+
+    ![改变参考系](/docs/remote-sensing-assets/change_crs.png)
+
+2. 导出图片
+
+    ![导出](/docs/remote-sensing-assets/export_tiff.png)
+
+#### 无任何GIS产品体系
+
+> 直接和AI说,  2个tiff对应的空间范围是一致,请使用有具体的空间参考系的对齐,并统一数据.  无法保证结果的准确性
+> 可能会出现以下场景
+> 1. A 未命名  B 高斯投影  =>  2个都高斯
+> 2. A 经纬度  B 高斯投影  =>  2个要么都是高斯 要么都是经纬度
+> 3. A 未命名  B 未命名   =>  无法预料结果
+
+处理后的数据如下
+
+![new_dataset](/docs/remote-sensing-assets/new_dataset.png)
+
+## AI自动处理
+
+接下来就可以和 AI 按照SKILL 组合的方式对话了 , 直接和AI对话即可. 一般常见的场景有下面几种:
+1. 常规
+   1. 入库     postgis-cli SKILL 触发导入
+   2. 发服务   postgis-service-cli 触发发服务
+   3. 显示     maplibre-common / cesium-common 显示
+2. 视觉类
+   1. 遥感比对:   死绝识别 + 空间分析
+   2. 遥感提取:   视觉识别 + 图像分割
+
+### 视觉比对
+
+> 实现同一区域、不同时相遥感影像的自动化对比分析。工具支持用户上传不同时间段两期影像数据，自动识别区域地类变化范围、绘制变化图斑边界、标准化标注地类代码及名称，最终输出标准化Excel成果数据表及文字分析报告。
+
+![test_ai](/docs/remote-sensing-assets/test_ai.png)
+
+可以看见AI的思考过程如下, 正确识别了这类情况
+
+![ai_think_1](/docs/remote-sensing-assets/ai_think_1.png)
+
+> 现在可以了,就是我想要的是2个年份的变化检测, 而不是现在的一个类似道路的提取.自动识别区域地类变化范围. 应该是先分类再对比变化, 分2步走
+
+![map-diff-preview](/docs/remote-sensing-assets/map-diff-preview.png)
+
+
+`这里有个很现实的问题是,  公网的大模型识别建筑屋顶\草地等常见分类是很准的.  但是针对行业特性分类: 如不同的矿类别/岩性特征等行业视觉的能力很弱,需要使用MapGIS-IGServer-S/特制版本的视觉本地小模型才能办到行业领域-垂直赛道的识别`
+
+### 入库
+
+（待补充）
+
+### 服务
+
+针对遥感数据发服务有2种方式:
+1. 标准的PG  postgis_raster模块 => ST_AsPNG出图 => postgis_gateway 网络服务
+2. 个人用户的文件夹服务, 本地本轮对话 有个 uuid,  如果生成到本地 就会走下面的情况
+
+   `https://gisagent.mapgis.com/files/{WS_uuid}/{folder_name}/{z}/{x}/{y}.png`
+   `https://gisagent.mapgis.com/files/3d1fdf1a-cffd-4858-a65b-6223d1301061/tiles_2025/16/53945/40353.png`
+
+### 显示
+
+由于前端只能支撑3857等主流投影, 如果是非3857 (墨卡托投影的数据), 需要进一步和AI对话将其处理成前端可以直接使用的格式
+
+> 你有没有把 tiff 统一处理成3857墨卡托投影呀, maplibre必须统一坐标系
+
+前端会使用 maplireb/cesium 显示加载瓦片
+
+![栅格预览](/docs/remote-sensing-assets/raster_preview.png)

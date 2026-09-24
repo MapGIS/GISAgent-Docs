@@ -1,6 +1,6 @@
 ---
 title: 添加自定义 MCP
-description: 在 GIS Agent（含离线部署）中新增一个自定义 MCP（Model Context Protocol）服务的教程：remote HTTP 与 local/stdio 两种形态、镜像内置、端口预留、opencode.json 与各 CLI settings.json 登记、secret 卫生、离线部署与验证。
+description: 在 GIS Agent（含离线部署）中新增一个自定义 MCP（Model Context Protocol）服务的教程：remote HTTP 与 local/stdio 两种形态、镜像内置、端口预留、opencode.json 与各 CLI settings.json 登记、secret 卫生、离线部署、L1 热更新与验证。
 ---
 
 # 如何添加一个自定义 MCP 服务
@@ -10,7 +10,7 @@ MCP（Model Context Protocol）给 Agent 挂载"工具 / 数据源"。本教程�
 
 与[添加自定义技能](/docs/custom-skill-tutorial)不同，MCP 的生效面更窄也更专：它只影响 Agent
 工具列表，**没有"技能市场"那种文件遍历展示**。所以理解 MCP 只需要抓住一条链路——
-"登记 → 打包同步 → 运行实例读取"。
+"登记 → 打包同步（或 L1 热更下发）→ 运行实例读取"。
 
 ## 先选择形态
 
@@ -161,29 +161,82 @@ stdio 形态无需内网端口，也就不涉及端口预留冲突，但同样�
 
 ---
 
-## 目标机就地添加（调试 / 增量，已部署环境）
+## 已部署环境就地热加（免全量重部署）
 
-若目标机已在运行、只想快速挂一个 remote MCP 验证，可不必重打包：
+若目标机已在运行、只想挂一个 remote MCP 验证或增量上线，**不需要走 `package.sh` 全量重打包**。
+但先要认清生效载体，避免改错文件：
+
+- 运行实例（含 Web UI 每会话拉起的临时 ACP 容器）真正读取的是 gisagent 挂载的
+  **profile** `config/local/agent.local-*.json`（`${GISAGENT_AGENT_CONFIG}`，默认
+  `agent.local-qwen-fable.json`）里 `runtime.env.OPENCODE_CONFIG_CONTENT` 的 `mcp` 段。
+- bundle 的 `config/opencode/opencode.json` 是**打包期源文件**，经
+  `rewrite_staged_agent_model_config` 同步进上面的 profile；只改它、不热更也不重启，
+  对正在运行的会话**无效**。
+- 变更后必须**新建会话**验证（旧会话缓存工具快照）。
+
+新增 remote MCP 的注册在 GISAgent 侧的生效面**只有** `OPENCODE_CONFIG_CONTENT` 的 `mcp` 段，
+所以热加是**单步配置热更（L1）**。以下两种方式任选其一（2026-09-23 已在本机栈
+"应用 → Web UI 新会话验收 → 同链路还原清理"全闭环实测）。
+
+### 方式 A：手工热更（步骤少，适合一次性调试）
 
 ```bash
 cd /opt/gisagent/<你的-bundle-目录>
 
-# 1) 载入服务镜像（若有）
-docker load -i images/your-mcp.tar
-
-# 2) 起服务（bundle 的 compose 已含该服务时）
+# 1) 载入服务镜像（若有）并起服务（bundle compose 已含该服务时）
+docker load -i images/hello-mcp.tar
 docker compose up -d hello-mcp
 
-# 3) 从 gisagent 容器网络确认服务可达（端口换成你的；gisagent 镜像里有 curl，没有 wget）
+# 2) 从 gisagent 容器网络确认服务可达（端口换成你的；gisagent 镜像里有 curl，没有 wget）
 docker exec mapgis-ai-gisagent sh -lc 'curl -s -o /dev/null -w "http_code=%{http_code}\n" http://hello-mcp:18090/health'
 
-# 4) 在 bundle 的 config/opencode/opencode.json 的 mcp 下登记 hello，
-#    并同步各 CLI settings.json 的 mcpServers；然后重启 gisagent
-docker compose restart gisagent
+# 3) 备份后，在挂载 profile config/local/agent.local-*.json 的
+#    runtime.env.OPENCODE_CONFIG_CONTENT（一段内嵌 JSON 字符串）的 mcp 里
+#    增加一项：{"hello": {"type": "remote", "url": "http://hello-mcp:18090/mcp", "enabled": true}}
+#    agent-opencode 与 agent-claude 两个块都要加
+
+# 4) 只定向重启生效的两个服务，不动其它容器
+docker compose restart gisagent agent-opencode
 ```
 
-> 就地改的 `opencode.json` 需要在下次 `package.sh` 前保留，否则会被正式打包流程覆盖；正式交付
-> 仍以"改仓库 → 重打包"（形态一 第 6 步）为准。
+### 方式 B：热更包（推荐，自动备份 + 健康闸门 + 失败自动回滚）
+
+`docker-hot-update` 框架把更新分为 L0~L3：**L0** 免重启刷卷（用于 SKILL 同步），**L1** 配置
+热更（MCP 注册就是这一层），**L2** 单镜像热更，**L3** 全量 bundle 冷更。
+
+开发机改好 profile 后打包（`scripts/package-hotfix.sh`）：
+
+```bash
+bash scripts/package-hotfix.sh --layer L1 \
+  --config config/local/agent.local-qwen-fable.json:config/local/agent.local-qwen-fable.json \
+  --restart gisagent,agent-opencode \
+  --http-check http://<GISAgent主机>:17076/gis/:200
+# 产物: dist/hotfix/gisagent-hotfix-L1-<日期>-<序号>.tar.gz
+```
+
+把该 tar 包传到目标机执行（新版 bundle 已内置 `scripts/hot-update.sh`，`package.sh` 自
+2026-09-23 起同步拷贝；旧 bundle 把该脚本单独拷进栈目录即可；执行机需 `python3` +
+PyYAML 解析 manifest）：
+
+```bash
+bash scripts/hot-update.sh \
+  --package gisagent-hotfix-L1-<日期>-<序号>.tar.gz \
+  --stack-dir /opt/gisagent/<你的-bundle-目录>
+```
+
+执行器流程：解包校验 → preflight → 备份 → 定向 apply → 健康闸门（`/gis/` 返回 200 才算过），
+失败**自动回滚**；历史记录在 `<栈目录>/.hotfix-backups/hotfix-history.log`。
+
+**撤销热加**：把还原后的 profile 再打一个 L1"还原包"，按同链路 apply 即可（实测清理即此法，
+还原后生效副本回到 `mcp=[hello, knowledgecli]`）。
+
+**若热加的是一个全新 MCP 服务镜像**（不只是注册）：起镜像属 L2（`docker load` 版本化 tag +
+定向 recreate，镜像需已随 bundle 交付或人工 `docker save/scp` 传输）；base 镜像链变化
+（如 `postgiscli`）则必须回 L3 全量。
+
+> 正式交付边界：热更加完别忘了把同一 MCP 登记回仓库 `config/opencode/opencode.json` 与各
+> CLI `settings.json` 的 `mcpServers`，以下一次 `package.sh` 全量包为准——打包门禁会校验
+> 注册面一致性，热更只解决"当场生效"。
 
 ## 验证结果
 
@@ -196,7 +249,8 @@ docker compose restart gisagent
   每个服务会带 `connected` / 失败状态。注意 `opencode` 读的是**运行实例当前生效的配置**：聊天 ACP
   的 `mcp` 来自 `OPENCODE_CONFIG_CONTENT`（由 gisagent 从挂载目录注入，会与全局
   `~/.config/opencode/opencode.json` 合并）。因此只改仓库 `config/opencode/opencode.json` 不会立刻
-  反映到这条命令——要经"重新打包 → 重启 gisagent → 重建运行实例"；只想快速核对，可临时
+  反映到这条命令——要么"重新打包 → 重启 gisagent → 重建运行实例"，要么按上文
+  "已部署环境就地热加"直接改挂载 profile 并定向重启；只想快速核对，可临时
   `OPENCODE_CONFIG_CONTENT='{...}' opencode mcp list` 或直接改容器内生效配置。
 
 - **服务健康**（从 gisagent 容器网络）：`curl -s -o /dev/null -w "%{http_code}\n" http://<mcp服务名>:<内部端口>/health`
@@ -206,8 +260,10 @@ docker compose restart gisagent
 ## 常见问题
 
 **服务起了，但 Agent 里看不到工具？**
-确认 `opencode.json` 的 `mcp.<id>` 已登记、并经 `package.sh` 同步进 `OPENCODE_CONFIG_CONTENT`；
-再确认已"重启 gisagent → 重建运行实例 → 新建会话"。就地改目录不重打包时，运行实例可能没读到新配置。
+确认 `opencode.json` 的 `mcp.<id>` 已登记，并且已进入生效载体 `OPENCODE_CONFIG_CONTENT`——
+要么经 `package.sh` 同步进 profile，要么按"已部署环境就地热加"直接改挂载 profile；
+再确认已"重启 gisagent（+ agent-opencode）→ 新建会话"。只改仓库源文件而不热更/重打包，
+运行实例读不到。
 
 **`opencode mcp list` 显示 connected，但 Web UI 聊天里 Agent 说工具不存在？**
 这是最常见的原因：Web UI 每个会话启动**临时容器**（`gisagent-agent-opencode-<user>-<session>-<hash>`），
@@ -240,4 +296,7 @@ unhealthy，检查 healthcheck 命令用的工具在镜像里是否存在——�
 
 - 想扩展技能而非工具：阅读[如何添加自定义技能](/docs/custom-skill-tutorial)。
 - 独立 volume、联网判定等更复杂扩展场景：参考工程规范
-  `openspecs/changes/docker-skill-mcp-extension/`（含"验证台账 / 场景用例"）。
+  `openspecs/changes/docker-skill-mcp-extension/`（含"验证台账 / 场景用例"，CASE-07 即
+  SKILL/MCP 热加的实测记录）。
+- 热更框架的分级模型（L0~L3）、manifest 契约与回滚语义：参考
+  `openspecs/changes/docker-hot-update/`。

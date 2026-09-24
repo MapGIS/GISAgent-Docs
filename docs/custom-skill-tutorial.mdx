@@ -1,6 +1,6 @@
 ---
 title: 添加自定义技能
-description: 在 GIS Agent（含离线部署）中新增一个自定义 SKILL 的完整教程：概念、两条生效链路、开发机步骤、离线目标机部署、验证与常见问题。
+description: 在 GIS Agent（含离线部署）中新增一个自定义 SKILL 的完整教程：概念、两条生效链路、开发机步骤、离线目标机部署、L0+L1 热更新与常见问题。
 ---
 
 # 如何添加一个自定义技能（SKILL）
@@ -46,7 +46,7 @@ description: 一句话说明这个技能做什么、以及用户提到哪些关�
 | 目标 | 靠什么生效 | 前置条件 |
 | --- | --- | --- |
 | ① 技能市场可见 | 技能文件同步进运行卷 `/workspace/skills`（系统递归扫描 `SKILL.md`） | 已登录 + 授权包含 `skills_basic` 模块 |
-| ② Agent 对话可调用 | 在 `config/opencode/opencode.json` 的 `skills.paths` 登记该目录 | 重新打包部署 + 重建运行实例 + 新建会话 |
+| ② Agent 对话可调用 | 在**生效载体**的 `skills.paths` 登记该目录：打包路径是 `config/opencode/opencode.json`（经 `package.sh` 同步进 profile），热更路径是直接改挂载 profile `config/local/agent.local-*.json` | 重启 gisagent（+ agent-opencode）+ 新建会话 |
 
 一句话结论：
 
@@ -216,17 +216,55 @@ docker exec mapgis-ai-gisagent sh -lc 'ls -l /workspace/skills/hello-gis/SKILL.m
 
 到这里，**刷新一次技能市场页面就能看到新技能**（链路①完成）。
 
-若还要让 Agent 在对话里用上它（链路②），继续第 4 步登记 `skills.paths`：
+若还要让 Agent 在对话里用上它（链路②），继续第 4 步登记 `skills.paths`。注意**改对载体**：
+运行实例（含 Web UI 临时容器）读的是挂载 profile `config/local/agent.local-*.json` 里
+`OPENCODE_CONFIG_CONTENT` 的 `skills.paths`，不是 bundle 的 `config/opencode/opencode.json`
+（后者是打包期源文件）：
 
 ```bash
-# 4) 编辑 bundle 内 config/opencode/opencode.json，在 skills.paths 追加
-#    "/workspace/skills/hello-gis"
-#    然后重启 gisagent、重建该用户的运行实例、新建会话
-docker compose restart gisagent
+# 4) 备份后，编辑 config/local/agent.local-*.json（${GISAGENT_AGENT_CONFIG} 指向的活跃
+#    profile），在其 runtime.env.OPENCODE_CONFIG_CONTENT（内嵌 JSON 字符串）的
+#    skills.paths 数组追加 "/workspace/skills/hello-gis"；
+#    agent-opencode 与 agent-claude 两个块都要加。
+#    同时把同一条路径补进 config/opencode/opencode.json，避免下次重打包丢失。
+
+# 5) 定向重启生效服务，不动其它容器
+docker compose restart gisagent agent-opencode
 ```
 
-> 生效顺序固定为：**改配置 → 重启 gisagent → 重建该用户运行实例 → 新建会话**。旧会话会缓存
+> 生效顺序固定为：**改配置 → 定向重启 gisagent（+ agent-opencode）→ 新建会话**。旧会话会缓存
 > 技能快照，务必用新会话验证。
+
+### 方式 C：热更包（L0+L1，带备份与健康闸门，推荐现场增量）
+
+上面的方式 B 手工步骤，对应 `docker-hot-update` 框架的两层：**L0** 刷卷（免重启，等价
+`skillpacks-sync`），**L1** 配置热更（profile 的 `skills.paths` + 定向 restart）。用框架脚本
+可以把"改哪份载体、漏没漏重启"这类人为事故变成自动化：
+
+```bash
+# 开发机：技能目录 + 改好的 profile 打进一个 L0 包 + 一个 L1 包
+bash scripts/package-hotfix.sh --layer L0 --skills hello-gis
+bash scripts/package-hotfix.sh --layer L1 \
+  --config config/local/agent.local-qwen-fable.json:config/local/agent.local-qwen-fable.json \
+  --restart gisagent,agent-opencode \
+  --http-check http://<GISAgent主机>:17076/gis/:200
+
+# 目标机：bundle 已内置 scripts/hot-update.sh（执行机需 python3 + PyYAML）
+bash scripts/hot-update.sh --package gisagent-hotfix-L0-<日期>-<序号>.tar.gz \
+  --stack-dir /opt/gisagent/<你的-bundle-目录>
+bash scripts/hot-update.sh --package gisagent-hotfix-L1-<日期>-<序号>.tar.gz \
+  --stack-dir /opt/gisagent/<你的-bundle-目录>
+```
+
+执行器自带 preflight → 备份 → 定向 apply → 健康闸门（失败**自动回滚**），历史在
+`<栈目录>/.hotfix-backups/hotfix-history.log`。撤销热加同样是"还原 profile / 卷内容后再打
+一个还原包"。该链路 2026-09-23 已在本机栈用临时技能完成"应用 → Web UI 新会话验收 →
+同链路清理"闭环（新会话实测 `Loaded skill: hotfix-demo-skill`，验收后已移除）。
+新版 bundle 已内置 `scripts/hot-update.sh`（`package.sh` 自 2026-09-23 起同步拷贝）；
+旧 bundle 目录把该脚本单独拷进去也能用，或直接走方式 B 的手工步骤。
+
+> 无论方式 B 还是 C，正式交付仍以"改仓库 `skillpacks/` + `opencode.json` → 下一次
+> `package.sh` 全量包"为准；打包门禁 `verify_skill_registration` 会校验注册面一致性。
 
 ## 步骤三：验证结果
 
@@ -249,7 +287,8 @@ docker compose restart gisagent
 
 **改了 `opencode.json` 但没生效？**
 运行配置由打包阶段的同步逻辑从 `opencode.json` 生成到 `OPENCODE_CONFIG_CONTENT`，必须重新打包
-（方式 A）或在目标机改运行配置并重启（方式 B）才会被读到。
+（方式 A），或在目标机直接改挂载 profile 并定向重启（方式 B），或走 L0+L1 热更包（方式 C）才会
+被读到。
 
 **`opencode debug skill` 能看到技能，但 Web UI 聊天里 Agent 不用它？**
 Web UI 每个会话启动**临时容器**，其 `OPENCODE_CONFIG_CONTENT` 来自 gisagent 挂载的
@@ -269,5 +308,8 @@ Web UI 每个会话启动**临时容器**，其 `OPENCODE_CONFIG_CONTENT` 来自
 
 - 需要扩展 **MCP（Model Context Protocol）服务**、独立 volume、联网判定等更复杂场景，参考工程
   规范文档 `openspecs/changes/docker-skill-mcp-extension/`（含可扩展的"验证台账 / 场景用例"）。
+- 热更框架的分级模型（L0~L3）、manifest 契约与回滚语义：参考
+  `openspecs/changes/docker-hot-update/`；MCP 侧的热加见[添加自定义 MCP](/docs/custom-mcp-tutorial)
+  的"已部署环境就地热加"。
 - 技能与运行期整体架构：参见 [技能详细更新日志](/docs/skills-detailed-update-log) 与
   [使用技巧](/docs/usage-tips)。
