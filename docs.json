@@ -74,6 +74,17 @@
             ]
           }
         ]
+      },
+      {
+        "tab": "地名地址",
+        "groups": [
+          {
+            "group": "查询场景",
+            "pages": [
+              "docs/place-address"
+            ]
+          }
+        ]
       }
     ]
   },

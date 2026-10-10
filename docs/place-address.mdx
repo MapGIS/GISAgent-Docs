@@ -1,0 +1,171 @@
+---
+title: 地名地址
+---
+
+# 地名地址
+
+> 地名地址的标准流程是  确定查询口径 => 选技能 => 取坐标 => 入库或出图
+> 成败的关键在“同一个地名，不同数据源给的坐标可能不是同一个点”
+
+同一个“黄鹤楼”，在线天地图、已入库的 PG 业务表、离线 1:25 万地名库可能给出**相差几十公里的三个点**。查询前先把口径说清楚，比事后修坐标省力得多。
+
+## 三种查询场景怎么选
+
+| 场景 | 使用的技能 | 是否联网 | 数据口径 | 典型用途 |
+| :--- | :--------- | :------- | :------- | :------- |
+| 在线地名解析 / 坐标纠偏 | `tianditu-geocoder` | 需要外网 | 天地图地理编码服务 | 单个景点、门牌、站点的精确定位；校验已有坐标是否偏移 |
+| 查项目库里已有的地名地址 | `postgis-cli` | 内网 | 项目已入库的业务表 | 需要地址、分类、年代等多字段，或要做统计、空间分析 |
+| 离线地名地址检索 | `postgis-poi-address` | 不联网 | 1:25 万宏观地名点（AGNP） | 批量取点、无外网环境、附近查点、快速出预览图 |
+
+**默认顺序建议：** 没指定来源时先走离线库（免费、可批量、不联网）；需要景点级精度再走天地图在线；需要属性字段或统计口径时走项目 PG 库。
+
+## 场景一：在线查地名（tianditu-geocoder）
+
+触发词：地名转坐标、地址转经纬度、位置纠偏、修正坐标、geocode。
+
+```bash
+# 单个关键词
+node "<SKILL_DIR>/tianditu-geocode.mjs" --keyword "武汉黄鹤楼"
+
+# 与原始坐标比较偏移距离，输出 offsetMeters
+node "<SKILL_DIR>/tianditu-geocode.mjs" --keyword "黄山西海大峡谷" --compare 118.164,30.132
+
+# 批量：逗号分隔，输出 GeoJSON
+node "<SKILL_DIR>/tianditu-geocode.mjs" --keywords "武汉大学,黄鹤楼,东湖风景区" \
+    --format geojson --out "<WS>/corrected-points.geojson"
+
+# 批量：每行一个地名（忽略空行与 # 开头的行）
+node "<SKILL_DIR>/tianditu-geocode.mjs" --input "<WS>/places.txt" \
+    --format csv --out "<WS>/places-corrected.csv"
+```
+
+**常用参数**
+
+| 参数 | 说明 |
+| :--- | :--- |
+| `--keyword <text>` | 单个关键词，可重复传入 |
+| `--keywords <a,b,c>` | 多个关键词，支持逗号、中文逗号、分号、换行分隔 |
+| `--input <file>` | 文本文件，每行一个关键词 |
+| `--compare <lon,lat>` | 与给定的原始坐标求偏移距离（米） |
+| `--format json\|geojson\|csv` | 输出格式，默认 `json` |
+| `--out <file>` | 写入文件；不传则输出到 stdout |
+| `--tk <token>` | 覆盖内置天地图 token，也可用环境变量 `TIANDITU_TK` |
+| `--dry-run` | 只打印请求 URL 与 headers，不联网，用于校验封装 |
+| `--raw` / `--timeout <ms>` | 保留原始响应 / 请求超时，默认 12000 |
+
+**实测输出（WGS84）**
+
+```json
+{ "ok": true, "keyword": "武汉黄鹤楼", "lon": 114.30129, "lat": 30.53696, "level": "兴趣点", "score": 99 }
+```
+
+* **关键判据是 `score` 和 `level`。** 只输入“黄鹤楼”时命中结果可能是 `level: 区县及以上级行政区划`、`score: 0`，也就是匹配到了行政区划而非景点；补上城市名“武汉黄鹤楼”后才是 `兴趣点`、`score: 99`。
+* **失败判定：** 只有 `status === "0"` 且经纬度可解析为数字才算成功；返回失败时保留关键词并记下 `message`，加城市、省份或景区全名重试。
+* **限制：** 依赖外网，且服务有访问频次限制，不适合几十万行的大批量地理编码；大批量请先落到离线库或项目库。
+
+## 场景二：查 PG 库里已有的地名地址（postgis-cli）
+
+涉及空间数据、查库、查表、查字段、要素数这类问题，先让 `postgis-cli` 盘点，再写查询。
+
+```bash
+# 1. 按关键词搜库里的表/字段（中文、英文都试试）
+postgiscli db search "地名地址" --compact
+postgiscli db search "poi" --compact
+postgiscli db search "address" --compact
+
+# 2. 看有哪些空间图层
+postgiscli spatial layers --compact
+postgiscli spatial search "黄鹤楼" --compact
+
+# 3. 只读查询，把几何拆成经纬度
+postgiscli query run "SELECT name, address, ST_X(geom::geometry) AS lon, ST_Y(geom::geometry) AS lat \
+FROM <schema>.<table> WHERE name LIKE '黄鹤楼%'" --compact
+
+# 4. 要喂给前端出图时，直接出 GeoJSON
+postgiscli query geojson "SELECT id, geom FROM <schema>.<table> WHERE name LIKE '黄鹤楼%'" --geom geom --compact
+```
+
+**要点**
+
+* **表名随项目库而定。** 有的项目库把地标放在自建表（如历史地标、景点表），有的放在 OSM 全量 POI 表（`gis_osm_pois_free_1` 一类）。所以务必先 `db search` / `spatial search` 确认，不要凭经验写死表名。
+* **只读用 `query run` / `query explain` / `query geojson`。** 落表要用 `query write-table`，且必须用户明确要求才写库。
+* **库内也提供了地名地址检索函数**，可直接 SQL 调用（与场景三同一份数据）：
+
+```bash
+postgiscli query run "SELECT name, name_py, kind, source_layer, lon, lat, score \
+FROM search_poi(q => '黄鹤楼', n => 5)" --compact
+```
+
+## 场景三：离线查 1:25 万地名地址（postgis-poi-address）
+
+触发词：离线地名地址、POI 查询、地址转坐标、附近查点、search_poi、不联网做地理编码。
+
+```bash
+# 先按名称/拼音查，不要一上来就猜 bbox
+python3 "<SKILL_DIR>/scripts/search_poi.py" --q "黄鹤楼" --n 10
+
+# 需要周边：用上面命中点的 lon/lat 再查半径
+python3 "<SKILL_DIR>/scripts/search_poi.py" --lon 114.30 --lat 30.54 --radius-m 2500 --n 50
+
+# 要看图：同一条命令加 --html，GeoJSON 内嵌进页面（避开 file:// 的 fetch CORS）
+python3 "<SKILL_DIR>/scripts/search_poi.py" --q "黄鹤楼" --n 10 --html "<WS>/huanghelou-poi.html"
+```
+
+**常用参数**
+
+| 参数 | 说明 |
+| :--- | :--- |
+| `--q <text>` | 名称或拼音关键词 |
+| `--kinds <a,b>` | 按地名类别过滤，逗号分隔 |
+| `--lon` / `--lat` + `--radius-m` | 中心点 + 半径查周边 |
+| `--bbox <minlon,minlat,maxlon,maxlat>` | 按范围查 |
+| `--n <int>` | 返回条数，默认 10 |
+| `--sql <select>` | 自定义一条 SELECT（必须含 `lon`/`lat` 列，仅允许 SELECT） |
+| `--out <file>` | 写 GeoJSON；默认 stdout |
+| `--html <file>` | 写 MapLibre 预览页，标题用 `--title` 改 |
+
+**kind 类别取值（节选）**
+
+| kind | 含义 |
+| :--- | :--- |
+| `settlement_admin` | 县级以上行政中心 |
+| `settlement_town` | 镇 / 街道 |
+| `settlement_village` | 村 |
+| `hydro` / `terrain` | 水系点 / 地形地貌点 |
+| `transport` / `culture` / `org` | 交通点 / 人文点 / 机构点 |
+
+**实测输出**
+
+| 名称 | 拼音 | kind | 经度 | 纬度 | score |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| 黄鹤楼 | Huanghelou | settlement_village | 114.610358 | 29.755412 | 1.0 |
+| 黄鹤楼街道 | Huanghelou Jiedao | settlement_town | 114.293698 | 30.540624 | 0.8 |
+
+* 结果固定是 **EPSG:4326 的 GeoJSON FeatureCollection**，坐标顺序为 `[lon, lat]`。
+* **数据粒度局限：** 这是 1:25 万宏观地名库，收录的是居民地、水系、地形、交通等宏观要素，**不含景区内部微地名**（如某个园、某条步道、某栋楼）。查不到就如实说明库里没有，不要改用在线 geocoder 或自己编造坐标。
+* **连接串：** 与 `postgis-cli` 相同，优先 `POSTGISCLI_DATABASE_URL`，其次 `DATABASE_URL`。不要额外传 `--conn`，也不要把连接串、主机地址写进文档或页面里。
+* **预览页约定：** 页面由脚本生成，不要再手写第二份 HTML；运行环境找不到 MapLibre 资源时会自动降级成 SVG 点位图，此时点位与名称仍然可见，不需要另外补一份页面。
+
+## 三条路径的坐标差异
+
+用同一个“黄鹤楼”实测：
+
+| 来源 | 命中名称 | 经度 | 纬度 | 口径 |
+| :--- | :------- | :--- | :--- | :--- |
+| 天地图在线 `武汉黄鹤楼` | 景点 | 114.30129 | 30.53696 | 兴趣点，score 99 |
+| 天地图在线 `黄鹤楼` | 同名区划 | 114.29702 | 30.54700 | 区县及以上级行政区划，score 0 |
+| 离线 1:25 万库 | 黄鹤楼 | 114.61036 | 29.75541 | settlement_village（村庄级居民点） |
+| 离线 1:25 万库 | 黄鹤楼街道 | 114.29370 | 30.54062 | settlement_town（乡镇街道级） |
+
+> 离线库的“黄鹤楼”是景点东南方向约 92 km 处的同名村庄居民点，两者不是一回事；真正靠近景点的是“黄鹤楼街道”（相距约 0.8 km）。**拿到结果先看 `kind` / `level` / `score`，再决定用哪一个点**，不要默认第一条就是想要的。
+
+## 常见问题
+
+* **同名地点歧义：** 关键词加城市或省份前缀；在线查询用 `--compare` 判断偏移量，偏离目标超过可接受范围就换更具体的关键词。
+* **score 很低或为 0：** 说明匹配精度差，通常是关键词太泛或地名有歧义，补全名重试。
+* **只要坐标不要地图：** 三个技能都能只输出 JSON / GeoJSON / CSV，去掉 `--html`、`--out` 即可。
+* **要落到前端显示：** 统一用 EPSG:4326 经纬度，`[lon, lat]` 顺序；入库或出图可参考[遥感影像](/docs/remote-sensing)的投影预处理一节。
+
+***
+
+**使用提示：** 在对话里直接说清“在线还是离线”“用哪个库”，例如“离线查询黄鹤楼的地名地址”“查询 PG 数据库黄鹤楼的地名地址”，可显著减少来回确认。
