@@ -1,0 +1,174 @@
+---
+title: 路网规划
+---
+
+# 路网规划
+
+> 路网规划的标准流程是  站点定位纠偏 => 顺序优化 => 路由计算 => 渲染出图
+> 成败的关键在“是否用了路由技能算真实道路”，而不是在地图上画直线
+
+## 先选口径：三种使用场景
+
+| 场景 | 怎么做 | 是否联网 | 产出 | 典型用途 |
+| :--- | :----- | :------- | :--- | :------- |
+| 要一个可交互的导航网页 | `route-navigation` 技能一键生成 | 路由与底图需网络 | `<城市>-route.html` | 城市路网规划演示、驾车/步行/骑行方案对比、多点途经规划 |
+| 要脚本里拿到真实里程与耗时 | 直接调 OSRM `/route/v1` GET 接口 | 需要路由服务 | 距离、时间、分段几何 | 批量算路、专题图上标注分段距离、生成 GeoJSON/GPX |
+| 要把路线贴进专题地图 | OSRM 返回的 `geometry.coordinates` 直接喂给 MapLibre | 需要路由服务 | 沿线绘制的路线图层 | Citywalk、通勤走廊、考察路线等专题制图 |
+
+**先说结论：** 只要任务里出现“路线规划 / 导航 / 路径 / 真实道路网络”，第一动作是加载 `route-navigation` 技能，而不是自己写 HTTP 请求。原因见文末「为什么必须走技能」。
+
+## 场景一：生成交互式路网导航页（route-navigation）
+
+触发词：路网规划、路线规划、导航规划、导航地图、路径规划、路网导航、route planner、driving directions。
+
+```bash
+# 标准用法：给出城市拼音、中文名、初始中心与缩放，输出导航网页
+node "<SKILL_DIR>/route-render.mjs" \
+  --pinyin zhengzhou-gxs --name "郑州高新区" \
+  --center 113.5522,34.8290 --zoom 16 \
+  --out "<WS>/zhengzhou-gxs-route.html"
+
+# 用自建 OSRM 服务替换公共实例
+node "<SKILL_DIR>/route-render.mjs" --pinyin wuhan --name 武汉 \
+  --center 114.305,30.593 --zoom 11 \
+  --router "http://10.0.0.11:5000/route/v1/{profile}/{coords}" \
+  --out "<WS>/wuhan-route.html"
+```
+
+**参数**
+
+| 参数 | 说明 |
+| :--- | :--- |
+| `--pinyin` / `--name` | 输出文件前缀与页面标题用的城市名 |
+| `--center <lon,lat>` / `--zoom <n>` | 地图初始视野；城市中心可在技能内置城市表中查 |
+| `--router <url>` | OSRM 兼容服务地址，支持 `{service}` / `{profile}` / `{coords}` 占位符；省略时用公共实例 |
+| `--tk <key>` | 天地图 key，公共测试 key 失效时自行申请后传入 |
+| `--out <file>` | 输出 HTML 路径；省略时默认 `<pinyin>-route.html` |
+
+**页面自带能力**
+
+* 天地图矢量底图 + 中文注记；MapLibre 走 GIS Agent 的 `/lib/maplibre/4.7.1/`，**不要把引擎拷进工作空间，也不要用 CDN**。
+* 驾车 / 步行 / 骑行三种模式，分别对应 `routed-car` + `driving`、`routed-foot` + `foot`、`routed-bike` + `bike`。
+* 起点 + 终点 + 最多 8 个途经点，可逐行增删；起终点交换、清空、标记拖拽后即时重算。
+* 两点之间可返回最多 3 条备选方案，在结果列表点击切换。
+* 逐步指引为中文（OSRM maneuver 类型已翻译），点击某一步地图会飞到该点并弹气泡。
+* 地图点选或拖拽后经 Nominatim 逆地理编码自动回填地名；搜索框输入地名可直接规划。
+
+**边界与限制**
+
+* **不支持公交与地铁路径规划**，公共 OSRM 实例没有该路网，需如实告知用户。
+* 公共实例有频次与请求体限制，多途经点或批量请求可能被 **429**；生产用途建议自建 OSRM 并用 `--router` 指过去。
+* Nominatim 公共实例约 1 req/s，不要在循环里无间隔调用。
+* 生成的 HTML 要在 GIS Agent 会话里预览，`file://` 打不开引擎。
+
+## 场景二：脚本里计算真实路径（OSRM HTTP 接口）
+
+```bash
+# 服务/Profile 对照：驾车 routed-car+driving / 步行 routed-foot+foot / 骑行 routed-bike+bike
+curl -s "https://routing.openstreetmap.de/routed-foot/route/v1/foot/\
+113.55164,34.83093;113.55162,34.83267;113.553547,34.827971;113.552307,34.825684;113.55164,34.83093\
+?overview=full&geometries=geojson&steps=true" -o route-osrm.json
+```
+
+**要点**
+
+* 坐标串按 `lon,lat` 且用 `;` 分隔，**顺序即为行走顺序**，闭合环线要把起点再写一遍。
+* `overview=full` 才给整条连续几何；只要分段用 `overview=false`。
+* `geometries=geojson` 直接得到 `[lon, lat]` 数组，可原样塞进 MapLibre 的 `LineString`。
+* `steps=true` 才有 `legs[i].steps`，里面含 maneuver 类型、路名（本例可解析出“雪松路”“莲花街”）与分段几何。
+* 读 `routes[0].distance`（米）、`routes[0].duration`（秒），分段读 `legs[i].distance / duration`。
+* 分段中点标注：取该 leg 第一个 step 的坐标序列中点，别用两站点连线中点（绕行路段会标偏）。
+
+**实测数据**（2026-10-15 复跑，FOSSGIS `routed-foot`）
+
+| 分段 | 距离 |
+| :--- | :--- |
+| ① 东门 → ② 路口 | 193 m |
+| ② 路口 → ③ 纽科科技园 | 719 m |
+| ③ 纽科科技园 → ④ 汉威科技 | 603 m |
+| ④ 汉威科技 → ① 东门 | 712 m |
+| **全程** | **2226.5 m / 29.7 min** |
+
+拿到结果后可直接落两份成果文件：路线 **GeoJSON**（`LineString` + `distance_m`、`duration_min`、`route_service`、`coordinate_system` 属性）和 **GPX**（`<trkseg>` 存轨迹点、`<wpt>` 存站点），GPX 可导进手机导航实地走。
+
+## 场景三：多个站点的行走顺序优化
+
+站点多于三个时，先算两两直线距离，再穷举顺序筛掉明显绕路的方案，最后用 OSRM 复核真实里程。
+
+```python
+# 直线距离 + 全排列（4 个站点只有 3!=6 种顺序，量小可直接枚举）
+from itertools import permutations
+orders = permutations(stations[1:])          # 起点固定，末位回到起点
+score  = lambda seq: sum(haversine(seq[i], seq[i+1]) for i in range(len(seq)-1))
+best   = min(([stations[0], *p, stations[0]] for p in orders), key=score)
+```
+
+**本例实测的 6 种顺序**（直线合计，坐标同场景二）
+
+| 顺序 | 直线合计 |
+| :--- | :------- |
+| 东门 → 路口 → 纽科 → 汉威 → 东门 | 1610 m |
+| 东门 → 汉威 → 纽科 → 路口 → 东门 | 1610 m |
+| 东门 → 路口 → 汉威 → 纽科 → 东门 | 1623 m |
+| 东门 → 纽科 → 汉威 → 路口 → 东门 | 1623 m |
+| 东门 → 汉威 → 路口 → 纽科 → 东门 | 2289 m |
+| 东门 → 纽科 → 路口 → 汉威 → 东门 | 2289 m |
+
+* 正反两个方向直线同为 1610 m，**顺序好坏要靠真实道路网络区分**：本例用 `routed-foot` 走一遍，得到 2226.5 m 的环线；而“东门→路口→汉威→纽科”这类交叉走法会产生重复路段。
+* 直线值只用于**排序筛选**，不能写进成果标注。地图上的“步行约 ××× 米”一律取 OSRM 的 `legs[i].distance`。
+* 站点少（≤3）时可跳过枚举，直接一次 OSRM 请求拿结果。
+
+## 案例复盘：河南工业大学 GIS Citywalk 专题图
+
+**任务：** A3 竖版专题地图 + 交互地图，4 个站点、真实道路步行环线、90 分钟活动时长，要求“不允许凭想象绘制道路”“不能虚构距离、坐标与比例尺”。
+
+**站点与坐标**（WGS84，坐标经天地图地理编码纠偏，见[地名地址](/docs/place-address)）
+
+| 编号 | 站点 | 经度 | 纬度 | 现场任务 |
+| :--- | :--- | :--- | :--- | :------- |
+| ① | 河南工业大学莲花街校区东门 | 113.55164 | 34.83093 | GNSS 定位、轨迹采集 |
+| ② | 莲花街与雪松路交叉口 | 113.55162 | 34.83267 | 道路网络调查、POI 采集 |
+| ③ | 纽科科技园 | 113.553547 | 34.827971 | 遥感与无人机摄影测量 |
+| ④ | 汉威科技集团 | 113.552307 | 34.825684 | 燃气管网 GIS、数字孪生 |
+
+**技能组合**
+
+1. `tianditu-geocoder`：四个站点名称批量纠偏，判断 `level` / `score`，公交站坐标不等于路口中心点。
+2. `route-navigation`：`routed-foot` 计算真实步行环线与各段距离；同时用 `route-render.mjs` 生成一份独立的路网导航页 `zhengzhou-gxs-route.html`。
+3. `maplibre-common`：天地图 `vec_w` + `cva_w` 底图、路线图层、方向箭头、分段距离与路名标注。
+
+**最终数据：** 全程 2.2 km（2226.5 m）、纯步行约 30 min（29.7 min）、含站点观察约 90 min；分段 193 / 719 / 603 / 712 m。
+
+**交付物**
+
+| 文件 | 说明 |
+| :--- | :--- |
+| `citywalk-map.html` | 交互式专题地图（MapLibre + 天地图底图 + 真实 OSRM 路线） |
+| `citywalk-route.geojson` | 路线 GeoJSON，属性含距离、时长、路由服务与坐标系 |
+| `citywalk-route.gpx` | 轨迹 + 站点航点，可导入手机导航 |
+| `stations.geojson` | 四个站点 Point |
+| `zhengzhou-gxs-route.html` | `route-navigation` 技能生成的路网导航页 |
+
+**制图约定：** 企业参观默认只在公共区域外部观察；无法核实的出入口、路段在图上标注“待核实”，不得虚构。
+
+## 为什么必须走技能（真实踩坑）
+
+本案例第一版**没有**加载 `route-navigation`，而是直接手写 OSRM 请求加直线估算，结果：
+
+* 用的 `router.project-osrm.org` 公共实例在细密街区里给出反常绕行（东门→路口直线约 200 m，返回 3.5 km），于是改用直线坐标手工“描路”。
+* 手工描路的分段标注是 220 / 740 / 320 / 600 m，全程写成“约 1.9 km”；换成技能内的 `routed-foot` 后真实值是 193 / 719 / 603 / 712 m、全程 2226.5 m。**单段最大偏差约 280 m（纽科→汉威），四段合计少算约 350 m。**
+* 箭头层用 `symbol-placement: line` + `text-field: '▶'` 在天地图底图上不稳定，改为在路线采样点上放 DOM Marker 才可靠。
+
+**正确顺序：** 解析任务 → 在可用技能里匹配（“路线规划 / 导航地图”正是 `route-navigation` 的触发词）→ 加载并按技能标准工作流执行 → 最后才做可视化排版。技能里已经封装好服务地址、profile 对照与失败兜底，手写 HTTP 等于把这些坑重新踩一遍。
+
+## 常见问题
+
+* **只有两点要多种交通方式对比：** 同一批坐标换 `routed-car` / `routed-foot` / `routed-bike` 各请求一次，比距离和时长。
+* **请求返回 `code: "NoRoute"`：** 途经点吸附不到可通行路网，检查坐标是否落在封闭园区、水域或绿地内，或把点挪到路边。
+* **`distance` 为 0 或异常小：** 坐标顺序写反或把 `lon,lat` 写成了 `lat,lon`。
+* **要离线算路：** 用 `--router` 指向自建 OSRM（或 Mapbox Directions 等企业服务），页面与脚本其余逻辑不变。
+* **比例尺与真实性的底线：** 只有底图具备可靠地理比例时才画数值比例尺，否则只给路线示意并明确标注为示意图。
+
+***
+
+**使用提示：** 描述需求时一并给出城市、站点清单、出行方式与是否可联网，例如“武汉三镇 5 个点位驾车通勤最优顺序，用自建 OSRM `http://…`”，可一次生成到位。相关章节：[地名地址](/docs/place-address)、[遥感影像](/docs/remote-sensing)。

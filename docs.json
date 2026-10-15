@@ -85,6 +85,28 @@
             ]
           }
         ]
+      },
+      {
+        "tab": "空间参考系",
+        "groups": [
+          {
+            "group": "坐标系匹配",
+            "pages": [
+              "docs/spatial-crs"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "路网规划",
+        "groups": [
+          {
+            "group": "规划流程",
+            "pages": [
+              "docs/route-navigation"
+            ]
+          }
+        ]
       }
     ]
   },
