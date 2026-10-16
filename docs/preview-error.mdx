@@ -1,0 +1,62 @@
+---
+title: 预览排障
+---
+
+# 预览排障
+
+> HTML 预览的标准排障流程是  F12 打开开发者工具 => 复制 Console 红色报错 => 粘贴回对话框 => AI 自动定位并修复
+> 成败的关键在"把报错原文给 AI"——描述"打不开""白屏"再多次，也不如一行 `xxx is not defined` 定位得准
+
+AI 生成的专题图 HTML（地图 + 图表 + 数据）代码量大、依赖多，预览时出现白屏、加载失败、部分功能不动是**常态而非意外**。这类问题几乎都不需要人工改代码，人工要做的只有一件事：**把浏览器控制台的报错原文复制给 AI**。
+
+## 一步操作：F12 复制报错
+
+![按 F12 打开开发者工具，把 Console 报错复制给 AI](/docs/preview-error/f12.png)
+
+1. 在预览页面按 **F12**（或右键 → 检查）打开开发者工具，切到 **Console** 标签；
+2. 找到红色 ❌ 报错行，**连同行号来源一起**右键 Copy message 复制；
+3. 粘贴到对话框发给 AI，等它改完后**强制刷新**（`Ctrl+Shift+R`，Mac 为 `Cmd+Shift+R`）再看效果。
+
+上图中这条 `Uncaught SyntaxError: Identifier 'APP_DATA' has already been declared  index.html:3646` 就是典型样例——同一个变量在页面里被声明了两次，AI 看到原文一轮就能改掉。
+
+## 常见报错与根因速查
+
+以下都是实际发生过的案例，报错特征可直接对号入座：
+
+| Console 报错特征 | 根因 | AI 的典型修复 |
+| :--------------- | :--- | :------------ |
+| `echarts is not defined` / `maplibre is not defined` | CDN 单点失败，库没加载出来 | 换多 CDN 源依次降级（jsdelivr → unpkg → cdnjs → 国内镜像） |
+| 库加载成功但页面初始化永远不执行 | 脚本动态注入时 `DOMContentLoaded` 已经触发，启动回调永远不会被调用 | 启动逻辑自适应：判断 `document.readyState`，已就绪就直接执行 |
+| `Cannot read properties of null (reading 'appendChild')` | 初始化代码在 `<head>` 里执行，此时 `document.body` 还不存在 | 改挂到 `document.head`，或把执行时机推迟到 DOM 就绪后 |
+| `Cannot read properties of undefined (reading 'slice')` 之类 | 数据嵌套层级读错，如 `data` 已经是数组又去访问 `data.features` | 按数据真实结构修正取值链 |
+| `Identifier 'XXX' has already been declared` | 同一变量/函数被重复声明（多次追加代码块的常见后遗症） | 去重合并声明 |
+| Console 干净但**底图灰掉 / 空白** | 报错不在 JS 而在网络：瓦片 403（token 失效）、CORS、混合内容被拦截 | 切到 **Network** 标签按底图域名过滤，把失败请求的**状态码**发给 AI（如 403 / `ERR_NAME_NOT_RESOLVED`） |
+| 改了代码但页面看起来"没更新" | 浏览器缓存了旧的 JS/数据文件；或打开的是旧的/测试页面 | 强刷清缓存；核对地址栏打开的是不是主入口 `index.html` |
+
+## 给 AI 的信息模板
+
+一条合格的报错反馈包含三样，缺一条 AI 就可能要多问一轮：
+
+```text
+报错原文（含来源文件和行号）：
+Uncaught TypeError: Cannot read properties of undefined (reading 'slice')  app.js:947
+
+触发操作：页面加载完成后，点开底部"统计图表"页签时弹出
+
+打开方式：file:// 直接双击 index.html，Chrome，已 Ctrl+Shift+R 强刷
+```
+
+* **报错原文 + 行号**是定位的核心，截图里的 `index.html:3646` 这种后缀一定要带上；
+* **触发操作**决定问题在初始化链路还是交互链路；
+* **打开方式**（`file://` 还是 http、浏览器版本）决定要不要考虑 CORS 与协议限制——`file://` 下 `fetch` 本地 JSON 会被浏览器直接拒绝，这是一类独立根因。
+
+## 注意事项
+
+* **Console 里的"黄色警告"通常可以不发**，优先发红色 ❌ error；页面功能确实异常但 Console 一条报错都没有时，再切 Network 标签看失败请求。
+* **发给 AI 前检查报错里有没有带 token 的 URL。** 底图请求失败时 Console 打印的完整 URL 常含 `tk=` 密钥，把这一段替换成 `tk=<REDACTED>` 再粘贴。
+* **修复期间只刷新、不改文件。** 手工改过 AI 生成的 HTML/JS 后再让 AI 修，它会基于旧代码改，两边互相覆盖；需要改动就全部交给 AI。
+* 预览正常但数据位置不对（整体偏移几百米），那不是预览问题，是坐标系匹配问题，走[空间参考系](/docs/spatial-crs)。
+
+***
+
+**使用提示：** 一句话模板即可开工——"预览报错如下，请修复：\<粘贴 Console 原文\>"。报错越原始越好，不要转述成"图表打不开了"。

@@ -65,6 +65,17 @@
         ]
       },
       {
+        "tab": "预览排障",
+        "groups": [
+          {
+            "group": "报错反馈",
+            "pages": [
+              "docs/preview-error"
+            ]
+          }
+        ]
+      },
+      {
         "tab": "遥感影像",
         "groups": [
           {
