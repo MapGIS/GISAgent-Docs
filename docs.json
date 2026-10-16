@@ -65,6 +65,18 @@
         ]
       },
       {
+        "tab": "氛围编程",
+        "groups": [
+          {
+            "group": "协作方法",
+            "pages": [
+              "docs/vibe-code",
+              "docs/vibe-code-cases"
+            ]
+          }
+        ]
+      },
+      {
         "tab": "预览排障",
         "groups": [
           {
