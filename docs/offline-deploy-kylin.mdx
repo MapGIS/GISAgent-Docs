@@ -1,0 +1,166 @@
+---
+title: 国产化环境部署
+description: 银河麒麟 V11 离线现场的实测基线、四道闸门与十步部署流程
+---
+
+# 国产化环境部署（银河麒麟 V11）
+
+> 本章只解决一件事：客户现场是国产操作系统时，离线部署与标准流程有哪些差异。标准流程本身不变，仍按[部署方案与前提](/docs/offline-deploy-plan)的确认清单执行。
+> 内容取自《GIS Agent 离线部署用户手册》V3.25（2026-10-18）第七章。
+
+**结论先行**
+
+- 软件栈已在麒麟 V11 上完整跑通（GIS Agent 全栈 + 离线 PostgreSQL/PostGIS + 局域网大模型接入），**不需要修改产品源码，也不要求客户升级 Docker 引擎**。
+- 硬件仍未国产化：推理仍依赖 NVIDIA / AMD 加速卡生态，国产加速卡未采购、未实测。
+- 麒麟现场的失败几乎都不在"装不上"，而在**四道现场闸门**。`deploy.sh` 自检全绿、容器全部 healthy，仍不等于"能对话"。
+
+## 国产化边界
+
+| 维度 | 现状 |
+| :--- | :--- |
+| 操作系统 | 已实测支持 |
+| 容器引擎 | 支持，但包名不同 |
+| 编排工具 | 需自带二进制 |
+| 数据库 | 已实测支持 |
+| 推理硬件 | **未国产化** |
+
+## 实测环境基线
+
+下表全部取自一台麒麟 V11 实测机的只读探测，用途是**和客户提供的机器逐项对账**。该实测机是低配虚机，不能当交付配置用，交付配置以[部署方案与前提](/docs/offline-deploy-plan)的硬件章节为准。
+
+| 项目 | 实测值 | 取值命令（只读） |
+| :--- | :--- | :--- |
+| 系统 | `Kylin Linux Advanced Server release V11 (Swan25)` | `cat /etc/kylin-release` |
+| 内核 / 架构 | `6.6.0-32.7.v2505.ky11.x86_64` / `x86_64` | `uname -r` 与 `uname -m` |
+| glibc | `2.38` | `ldd --version`（取首行） |
+| libstdc++ | 提供到 `GLIBCXX_3.4.30` | `strings /usr/lib64/libstdc++.so.6`（筛 `GLIBCXX_3.4.*` 取最高） |
+| SELinux | `Disabled` | `getenforce` |
+| 防火墙 | `firewalld` 运行中，默认区域 `public` | `firewall-cmd --state` 与 `--get-default-zone` |
+| 容器引擎 | `moby-24.0.9`，daemon API `1.43` | `rpm -q moby docker-cli containerd` 与 `docker version` |
+| 编排 | Compose `v5.6.0`（官方静态二进制） | `docker compose version` |
+| 软件源 | 仅 `v11-adv-os`、`v11-adv-updates` 两个 | `dnf repolist` |
+| 根文件系统 | LVM 逻辑卷 `klas-root` | `df -h /` |
+
+**两条必须核对的语义**：
+
+1. `docker` 命令存在不代表守护进程存在——该机出厂只有 `docker-cli`，引擎要另装 `moby`。
+2. **daemon 的 API 版本决定会话工作区的挂载语义**（本机 `1.43` 低于 `1.44`），必须按下方闸门 3 走对应档位，且**不能凭 `docker version` 里 CLI 的版本号判断**。
+
+## 麒麟软件源缺什么，怎么补
+
+| 需求 | 麒麟 V11 源内情况 | 现场做法 |
+| :--- | :--- | :--- |
+| Docker 引擎 | 有，包名 `moby`（含 `dockerd` 与 `docker.service`） | `dnf install moby`；`docker-init`、`libdevmapper` 由源内 `tini-static`、`device-mapper` 满足 |
+| Docker Compose | **没有** | 官方静态二进制放到 `/usr/local/lib/docker/cli-plugins/docker-compose`；无 root 时放用户级 `~/.docker/cli-plugins/` 同样生效 |
+| 浏览器 | **一个都没有**（两个源内均无 firefox / chromium） | 属现场 IT 策略，不是本产品依赖，不要为装浏览器改源 |
+| podman | 该实测机未安装 | 若客户机预装，先确认 `docker` 命令指向的是 `moby` 守护进程再部署 |
+
+**麒麟源只有内网可达时才装得动**：这类目标机通常没有外网出口，只有一段局域网 HTTP 代理。此时 `dnf` **不读** `http_proxy` 环境变量，只认 `/etc/dnf/dnf.conf` 里的 `proxy=http://<代理主机>:<代理端口>`。两条配套判据：
+
+- 验证出网一律用 `curl -sS -o /dev/null -w '%{http_code}\n' <地址>`，**不要用 `ping`**：ICMP 不走 HTTP 代理，`ping` 全丢包不代表代理坏了。
+- 远程执行环境通常带注入的代理变量。要测"不带代理是否真的不通"，必须 `env -i <命令>` 把环境清干净，否则这条阴性对照会静默走代理而假性成功。
+
+## 端口与防火墙：容器发布端口和宿主自建端口不是一回事
+
+麒麟默认开着 `firewalld`，实测出现**同一台机器上两类端口行为不一致**，现场极易误判成部署失败。
+
+| 端口类型 | 例子 | 实测（由同网段另一台机器发起） | 结论 |
+| :--- | :--- | :--- | :--- |
+| 容器发布端口 | Web `17076`、Gateway `3333` | 可达，分别返回 `302` 与 `200` | 由 Docker 的转发规则承载，通常无需额外放行 |
+| 宿主自建进程端口 | 离线 PostgreSQL `17072` | **被拒**，报"没有到主机的路由" | 需要显式放行，否则其它机器连不上 |
+| 同一端口，从容器内访问宿主 | `17072` | 实测连通，栈保持 healthy | 容器到宿主这条链路不受该限制，别把它当成部署失败 |
+
+即**只有"跨机器直连宿主自建数据库"这一种场景需要动防火墙**。放行命令（按现场端口替换，需 root）：
+
+```bash
+firewall-cmd --permanent --add-port=17072/tcp
+firewall-cmd --reload
+```
+
+判据必须能失败：放行前后各跑一次 `nc -vz <数据库服务器> 17072`，期望从不可达变为 `succeeded`。放行后仍不通，再查数据库自身的 `listen_addresses` 与认证配置，不要先怀疑本产品。
+
+## 数据库离线包在麒麟上的落地要点
+
+交付的 PostgreSQL 17 + PostGIS 离线包在 Ubuntu 24 上构建，**在麒麟上可直接运行，不要重编**：其二进制最高只依赖 `GLIBC_2.34`，低于麒麟 V11 的 glibc `2.38`。需要处理的只有共享库和参数。
+
+1. **PostGIS 缺 7 个共享库**：`libcurl-gnutls.so.4`、`libjbig.so.0`、`libjpeg.so.8`、`libdeflate.so.0`、`libbz2.so.1.0`、`librtmp.so.1`、`libsasl2.so.2`。补入包的 `lib` 目录后 `pg_ctl restart`，12 个扩展 `CREATE EXTENSION` 全过，`postgis_version()` 返回 `3.5`。筛库必须用 `ldconfig -p` 的 **soname 全集精确比对**；用"带空格的前缀匹配"会把无关库一起拷进来。
+2. **监听与认证**：自建实例监听 `0.0.0.0:17072`，`pg_hba` 至少放行 `127.0.0.1/32`、`172.16.0.0/12`、`<现场网段>` 三条 `scram-sha-256`。
+3. **`psql` 与 `initdb` 必须显式带 `-p 17072`**：不带端口会去连默认 `5432` 的本地 socket 直接失败，该报错容易被误读成"库没起来"。
+4. **编排侧走 remote 拓扑**：宿主自建库用 `--database-url postgresql://<用户>@<数据库服务器>:17072/<库名>` 传入，不要用 colocated 分支（那条分支依赖同名容器做地址重写与联网）。容器内探测宿主端口时用宿主内网地址或 `172.17.0.1`，**不要指望 `host.docker.internal`**（部分镜像里没有这个解析）。
+
+## 四道现场闸门
+
+麒麟离线机的失败按下面顺序排查，**任何一跳不过都表现为"装好了但没法用"**。
+
+| 闸门 | 现象 | 现场结论 |
+| :--- | :--- | :--- |
+| 1 容器出网 | `deploy.sh` 全绿、容器 healthy，对话却报 `Cannot connect to API` | 宿主 shell 的代理不会进容器，且模板对部分侧车显式写空代理。在 bundle 目录放 `docker-compose.override.yml` 注入代理，并让动态会话容器也拿到同名变量后重建 GISAgent（该变量白名单属于运行配置项，按厂商指导修改，本文不展开其路径与字段）。`NO_PROXY` 必须含现场网段与 `172.16.0.0/12`，否则同网段数据库互访也被劫持 |
+| 2 授权 | 界面提示"系统未授权"，且**不拉起会话容器** | 新机必须先上传按机器指纹签发的 `license.lic`，这不是部署失败 |
+| 3 会话工作区 | 会话一启动就报无法写入工作目录 | 引擎 API 低于 `1.44` 会**静默丢弃** `volume-subpath`。`deploy.sh` 按语义实测选档，麒麟机应落在 `shim`（逐用户隔离保留），**不要求客户升 Docker** |
+| 4 "看起来绿了" | 复验通过但真实会话仍异常 | 三个陷阱：垫片不能只在有环境变量时生效、单文件 bind 挂载不热更新、判据必须打在 GISAgent 的真实调用链路上 |
+
+**部署顺序**：`deploy.sh` → 代理收尾（闸门 1 的 override 与变量透传）→ 上传授权 → 建会话验收。代理收尾必须在 `deploy.sh` 之后执行，重放不会破坏 `users/` 布局。
+
+老引擎机器部署完成后，`deploy.sh` 日志应出现"会话工作区挂载模式=shim"与"GISAgent 同构环境下 `<WS>` 可写且跨用户不可见"两行；缺任何一行都按未通过处理。只有显式打开降级开关才会退回共享布局，此时同机用户互相可见会话产物，**必须写进交付单由客户确认**。
+
+## 现场确认清单
+
+开工前在目标机上跑一遍（全部只读、不需要 root），共 14 条命令，把结果与上方基线逐项对账。
+
+```bash
+cat /etc/kylin-release
+uname -r
+uname -m
+ldd --version
+getenforce
+firewall-cmd --state
+firewall-cmd --get-default-zone
+rpm -q moby docker-cli containerd
+docker version
+docker compose version
+dnf repolist
+grep MemTotal /proc/meminfo
+nproc
+df -h /
+```
+
+逐项判定：
+
+| 探测结果 | 判定与动作 |
+| :--- | :--- |
+| 有 `docker-cli`、无 `moby` | 麒麟上的正常状态，装 `moby` 即可，不要在源里找 `docker-ce` |
+| `docker compose version` 失败 | 源内无该包，放官方静态二进制 |
+| daemon API 低于 `1.44` | 会话工作区走 `shim` 档（闸门 3），**不得改成共享布局** |
+| `firewalld` 为 `active` | 跨机访问宿主自建端口需放行 |
+| `getenforce` 为 `Enforcing` | 本手册实测机为 `Disabled`；Enforcing 现场必须先完整跑一轮部署验收，再对客户承诺 |
+| 内存或核数明显低于交付配置 | 只作功能验证环境，**不得据此承诺并发能力** |
+
+## 麒麟现场完整部署流程（裸机 → 能对话）
+
+十个编号步骤，每步只给"命令 → 期望读数 → 不通过时看哪儿"。下面用 `<数据库服务器>`、`<GIS-Agent-IP>`、`<模型服务>` 三个占位符，单机体时三者同值。
+
+| 步骤 | 动作 | 期望读数 |
+| :--- | :--- | :--- |
+| 1 | 只读探测，先对账再动手 | 与实测基线逐项一致；daemon API 版本单独记下 |
+| 2 | 装容器引擎（`dnf install moby` + `systemctl enable --now docker`） | `docker version` 同时打印 Client **和 Server** 两段；`docker info` 不报错 |
+| 3 | 放 Compose 静态二进制 | `docker compose version` 出版本（实测 `v5.6.0`） |
+| 4 | 传包、校验、解压 | 两端 `md5sum` 一致；包内镜像与卷归档以 `manifest.txt` 为准 |
+| 5 | 备数据库（补 7 个共享库后 `pg_ctl restart`） | `CREATE EXTENSION` 通过，`postgis_version()` 返回 `3.5` |
+| 6 | 执行 `deploy.sh`（`--database-url` + `--database-topology remote` + `--non-interactive`） | 退出码 `0`；日志出现"会话工作区挂载模式=shim"与"垫片运行期复验通过"两行；GISAgent、四个 Agent、`postgis-gateway`、`knowledge-mcp-http` 全部 healthy |
+| 7 | 代理收尾（**必须在 `deploy.sh` 之后**） | 容器内 `curl -sS -o /dev/null -w '%{http_code}\n' http://<模型服务>/v1/models` 返回 HTTP 状态码而不是 `000` |
+| 8 | 上传授权 | 校验通过，首页"系统未授权"提示消失 |
+| 9 | 模型面就绪核对 | 新建会话的下拉里能选到局域网模型；从容器所在网络访问 `/v1/models` 能看到同一个模型 ID |
+| 10 | 建会话验收（终判据） | 工作目录 `/workspace/sessions/<会话 ID>` 可写；容器内 `ls /workspace` **不出现 `users/`**；落盘文件在卷侧路径带 `users/<uid>/sessions/<会话 ID>/...`，卷根无裸 `sessions/<会话 ID>` |
+
+各步骤不通过时的定位：
+
+- 步骤 2 只有 Client 段没有 Server 段 → 机器上只有 `docker-cli`，守护进程没装或没起；`dnf` 拉不动源 → 按上方代理判据用 `curl` 验出网。
+- 步骤 4 md5 不一致 → 重传，**不要拆分或改名 bundle 内部目录**。
+- 步骤 5 连不上 → 先确认有没有带 `-p 17072`；扩展报错 → 按 `ldconfig -p` 全集精确补库。仅"其它机器直连宿主自建库"时才动防火墙。
+- 步骤 6 数据库 TCP 预检失败 → 回步骤 5（监听地址、认证配置、防火墙三查）；日志读到的挂载模式既不是 `shim` 也不是 `native` → 现场显式开了降级开关，必须写进交付单。单机体也走 `remote`。
+- 步骤 7 返回 `000` → 容器仍没出网，先查 `NO_PROXY` 是否含现场网段与 `172.16.0.0/12`，再查会话容器的变量透传白名单是否漏了变量名。
+- 步骤 8 校验失败 → 先核对机器码与本机是否一一对应；**未授权时不会拉起会话容器**，这不是部署失败。授权指纹只取 `os / machine_id / cpu_id / system_uuid / volume_serial`，不含主机名，所以容器重建不会失效、无需重传。
+- 步骤 9 下拉没有该模型基本都是三件事之一：运行配置里的地址与模型 ID 没改对、GISAgent 未重启、复用了旧会话或旧的 ACP 运行实例。先排步骤 7，容器出网没通时这里必坏。
+- 步骤 10 报无法写入工作目录 → 闸门 3；"复验通过但真实会话仍异常" → 闸门 4 的三个陷阱；只有 `ACP session created` 不算通过。
+
+**这条链路只有三处能证明"真的能对话"**：步骤 6 的两行日志、步骤 7 容器内 `http_code` 非 `000`、步骤 10 卷侧路径带用户子树。其余步骤全绿只是"装上了"。步骤 8 与步骤 9 顺序可换，但都必须在步骤 10 之前完成。

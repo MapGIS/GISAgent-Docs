@@ -1,0 +1,241 @@
+---
+title: 实施与运维要点
+description: 三包关系、deploy.sh 职责、部署后验收判据、联网能力矩阵与私网模型运行期判据
+---
+
+# 实施与运维要点
+
+> 本页是[部署方案与前提](/docs/offline-deploy-plan)的命令与判据补充，内容取自《GIS Agent 离线部署用户手册》V3.25（2026-10-18）第八章技术附录。手册正文共 8 章、74 个层级标题、1746 行、47 条修订记录，本页只收实施现场每天会用到的部分。
+> 出于安全约束，手册中涉及密钥注入的文件路径与配置字段名不在本文档展开；现场按厂商交付说明操作，本文只给不含敏感信息的验证方法。
+
+## 三个离线包关系
+
+三套离线包可以单独打包、单独传输、单独恢复，不是同一个安装包的三种模式。
+
+| 包 | 责任边界 | 是否必需 |
+| :--- | :--- | :--- |
+| 数据库离线包 | 提供 PostgreSQL、pgAdmin、SkillHub runtime | 必需 |
+| 离线大模型包 | 提供 GPUStack server / worker 和模型 API | 局域网大模型场景必需 |
+| GIS Agent 离线包 | 提供业务容器、运行配置和技能包 | 必需 |
+
+局域网大模型场景的部署顺序是 数据库包 → 离线大模型包 → GIS Agent 包；公网场景可跳过离线大模型包，但数据库包和 GIS Agent 包仍然需要。
+
+GIS Agent 离线包交付业务容器、配置、技能包、知识库运行文件、离线 Docker 镜像和必要的数据卷归档；部署脚本在目标机上加载镜像、同步运行配置、写入环境文件、恢复数据卷并启动服务。**离线包不含大模型权重，也不负责启动大模型推理服务**；数据库服务同样不由 GIS Agent 包安装。
+
+## bundle 内容
+
+| 路径 | 用途 |
+| :--- | :--- |
+| `deploy.sh` | 目标机部署入口 |
+| `docker-compose.yml` | 服务编排文件 |
+| `images/docker-images.tar` | 离线 Docker 镜像包 |
+| `volumes/` | 可恢复的数据卷归档 |
+| `config/` | 运行、网关等配置 |
+| `manifest.txt` | bundle 内容核对清单 |
+
+解压后先 `chmod +x deploy.sh`，再按 `manifest.txt` 核对包内镜像与卷归档。`md5sum` 需与出包侧记录值一致，不一致就重传，**不要拆分或改名 bundle 内部目录**。
+
+## deploy.sh 的职责边界
+
+`deploy.sh` 按顺序执行 **16 步**，可概括为四组：
+
+| 组 | 内容 |
+| :--- | :--- |
+| 校验与收集 | 校验 bundle 完整性；收集数据库、瓦片服务和可选模型配置；展开运行路径占位符；校验运行配置与输出契约 |
+| 配置与环境 | 同步 bundle 配置到部署用户；更新 `.env`；校验数据库 URL（默认拓扑 `remote`，禁止使用数据库容器名或本机地址）；从 GIS Agent 主机预检数据库服务器 TCP 端口 |
+| 镜像与网络 | 加载 `images/docker-images.tar`；创建 `gisagent-network`、`gisagent-ai-network`；多机部署不创建也不依赖跨主机数据库网络 |
+| 启动与健康 | 停止旧 stack 并启动新 stack；按规则恢复 `volumes/` 归档；预创建缺失的固定命名 external volume；修复动态运行容器的 home 目录属主；等待 `postgis-gateway`、四个 Agent、`knowledge-mcp-http` 和 `mapgis-ai-gisagent` 健康，失败时打印对应容器最近日志并返回非零 |
+
+数据库 TCP 预检失败时不会继续重建业务栈，会提示数据库服务状态、监听地址和防火墙检查项。`--skip-up` 仅用于生成或更新配置时跳过该预检。
+
+常用参数共 5 个：
+
+```bash
+./deploy.sh --non-interactive
+./deploy.sh --database-url 'postgresql://<用户>@<数据库服务器>:17072/<库名>'
+./deploy.sh --skip-images
+./deploy.sh --skip-volumes
+./deploy.sh --skip-up
+```
+
+首次部署不要跳过管理员口令和 WebUI 口令，否则网关会在数据库连接成功后仍因认证未配置而退出。会话密钥不要求现场手工输入：目标机已有引用则保留，否则由 `deploy.sh` 自动生成随机值。
+
+这份脚本只处理 GIS Agent 包本身，不负责生成或安装数据库包、离线大模型包。
+
+## 数据卷规则
+
+| 对象 | 行为 |
+| :--- | :--- |
+| `workspace-data` | 默认保留现有数据，避免覆盖用户 workspace |
+| `skill-artifacts` | 按 bundle 内归档恢复；缺少归档时创建空 volume |
+| `gateway-data` | 按 bundle 内归档恢复；缺少归档时创建空 volume |
+
+编排使用固定命名的 external volume，bundle 目录名变化不会创建同名新卷；`deploy.sh` 会在启动前创建缺失卷，并修复已有动态运行容器的 home 目录属主。**禁止使用 `docker compose down --volumes`**。如果只想保留目标机已有数据，部署时用 `./deploy.sh --skip-volumes`。
+
+## 部署后验收
+
+### 容器状态
+
+至少确认下面 7 个服务处于 `Up` 或 `healthy`：
+
+`mapgis-ai-gisagent`、`postgis-gateway`、`knowledge-mcp-http`、`agent-opencode`、`agent-claude`、`agent-qwen-code`、`agent-qoder`。
+
+新版包的 `deploy.sh` 会自动等待上述服务健康；手工验收仍建议保留 `docker logs --tail 120 <container>`，因为**健康检查不能替代模型 API、鉴权注入和会话非空回复的验收**。
+
+### Web 入口
+
+```bash
+curl -fsS http://127.0.0.1:17076/
+curl -fsS http://127.0.0.1:19081/
+curl -fsS http://127.0.0.1:18081/healthz
+```
+
+`19081` 固定由数据库离线包提供 SkillHub Web 页面；`18081` 保留给独立离线大模型包的 GPUStack UI / API；`19080` 是 SkillHub API，通常不直接给浏览器用户。GPUStack `/healthz` 成功只说明平台控制面可用，能否推理还取决于 worker、GPU 驱动、容器工具链、模型权重和推理后端。
+
+### 会话验收
+
+- **公网模型**：新建一次会话，确认能返回有效文本。无响应时优先排查模型 API 地址、密钥、模型 ID，以及容器到公网模型服务的连通性。
+- **局域网模型**：额外确认内网模型网关可达、推理服务已加载模型、GPU 资源正常。无响应时优先排查内网地址、鉴权、模型 ID、GPU 状态和推理服务日志。
+- **口径**：`ACP session created` 只表示会话建立成功，不表示模型调用成功。必须看到消息列表里出现**非空 assistant 内容**，才能判定对话链路完成。只有 `ACP session created` 而后没有有效回复，通常是模型调用阶段失败，而不是 Web 登录或握手失败。
+
+局域网模型的完整链路是：GPUStack server → worker `READY` → 推理后端 → 模型 `RUNNING` → `/v1/models` → `/v1/chat/completions` → 业务侧模型接入 → 会话非空回复。缺任何一环都算未通。
+
+### 授权验证
+
+首次登录后如果系统未授权，首页会提示"系统未授权，请在后台授权管理页面上传 license.lic"。**这不是部署失败**，而是需要补充服务器授权。按顺序执行：
+
+1. 访问 `http://<对应IP>:17076/manager/`。
+2. 点击 `授权管理`。
+3. 复制页面中的机器码，提供给厂商，用于签发绑定当前服务器的授权。
+4. 厂商收到机器码后分发对应的 `license.lic`。
+5. 回到授权管理页上传 `license.lic`，也可以直接粘贴其 JSON 内容。
+6. 点击 `上传并校验`，校验通过后返回首页确认未授权提示消失。
+
+校验失败时优先确认机器码与当前服务器是否一一对应、文件是否为厂商签发且内容完整。
+
+## 联网能力矩阵
+
+下表按当前默认配置说明。若把模型地址改为客户内网的兼容接口，`agent-*` 的可用性需要按现场重新验证。
+
+| 能力 | 公网环境 | 纯局域网环境 | 说明 |
+| :--- | :--- | :--- | :--- |
+| `agent-opencode` | 可用 | 默认不可用 | 默认连接公网模型端点；切换到内网兼容端点后再验证 |
+| `agent-claude` | 可用 | 默认不可用 | 依赖 Anthropic 兼容端点 |
+| `agent-qwen-code` | 可用 | 默认不可用 | 依赖 Qwen / ModelStudio 端点 |
+| `agent-qoder` | 可用 | 默认不可用 | 默认需要外部服务和浏览器授权 |
+| `knowledge-mcp-http` | 可用 | 可用 | 只依赖 GIS Agent 内网服务 |
+| `postgis-gateway` | 可用 | 可用 | 只依赖数据库和容器网络 |
+| Web、pgAdmin、授权管理 | 可用 | 可用 | 只依赖本地服务和授权文件 |
+
+7 项能力中 4 项在纯局域网默认可用性为"不可用"，且全部集中在 `agent-*` 运行面；本地业务服务（知识库、网关、Web、授权）不受影响。纯局域网现场如果不能访问公网，实施人员只需要确认局域网模型接口和本地业务服务。
+
+本表与[离线部署：技能影响范围](/docs/offline-deploy)的 L1–L6 是两个口径：本表讲**模型调用面**（哪个 Agent 客户端能起来），L1–L6 讲**制图产出面**（页面、底图、字体、数据四个环节哪些会断）。离线交付时两张表都要过。
+
+## 私网 Token 服务器运行期判据
+
+以下判据来自局域网大模型包的实测取证，回答现场最常被追问的问题：对话报 `Model not found or no running instances available`，是不是部署坏了？结论是**同一条报错有三种成因，处置方式完全相反**，只有其中一种需要人工干预。
+
+| 形态 | 签名 | 是否自愈 | 处置 |
+| :--- | :--- | :--- | :--- |
+| 容器退出型重启（镜像内置显存看门狗） | worker 日志出现 `Restarting model instance … (attempt 1)`，容器有退出记录；约 20 秒后同一端点恢复 200 | **是** | 等待即可；客户端重试窗口建议不小于 180 秒，不要按故障报障 |
+| 僵尸态（宿主内存耗尽杀掉推理子进程） | 容器仍 `Up`、`/v1/models` 仍返回 200，但容器进程表里**没有**推理进程，对话恒为 503 | **否**，可无限期保持 | 必须由运维复位该模型实例；宿主内核日志 `Out of memory: Killed process` 是归因证据 |
+| 副本被缩到 0 | `/v1/models` 不再列出该模型，对话返回 404 | **否** | 把该模型副本数恢复为 1，约 40 秒内重新就绪 |
+
+关键判据：**容器 `Up` 与 `/v1/models` 返回 200 都不构成"模型可对话"的证据**。验收和排障必须以一次真实的 `POST /v1/chat/completions` 往返为准。关闭看门狗或复位实例都会中断正在进行的对话，属于服务变更，需按现场变更流程执行。
+
+### 宿主重启后日志要去容器标准输出取
+
+宿主重启时推理容器由 Docker 重启策略自行拉起，而 worker 不会重新接管它的输出流。结果是：按修改时间排序"最新"的那份容器日志其实停在崩溃前一刻，末行是 `cleaning up before exit`——照它排障会拿到一份死证据。
+
+```bash
+uptime -s
+docker inspect -f '{{.State.StartedAt}}' <实例名>-run-0
+docker logs -t --since 30m <实例名>-run-0 2>&1 | tail -50
+```
+
+容器启动时间晚于宿主启动时间，即 worker 未重新接管。
+
+### 宿主内存是"到顶淘汰"，不是无界增长
+
+长上下文推理把三类占用叠加在宿主内存上：跨会话的 prompt cache（受缓存字节上限约束）、上下文 checkpoint（默认 32 块）、模型权重在加载期的短暂驻留。缓存到顶时服务自行淘汰最旧条目，实测单次可释放 24 GB 量级，因此"内存一会儿逼近宿主上限、一会儿又回落"是**正常锯齿**，不是泄漏；淘汰会短暂阻塞请求处理。
+
+```bash
+# 只读、无需 root。四个量一起看才有意义
+cat /sys/fs/cgroup/system.slice/docker-<容器ID>.scope/memory.stat
+cat /sys/fs/cgroup/system.slice/docker-<容器ID>.scope/memory.peak
+cat /sys/fs/cgroup/system.slice/docker-<容器ID>.scope/memory.current
+cat /sys/fs/cgroup/system.slice/docker-<容器ID>.scope/memory.events
+```
+
+`memory.events` 的 `oom_kill` 为 0 即说明这轮内存压力没有演变成 kill，不需要人工复位。运维要关注的不是"缓存会不会涨满"，而是**该容器峰值留给桌面和其它服务的余量**：实测单实例峰值可达 72 GiB 量级，在 96 GB 级宿主上只剩约 23 GB 给其余进程。
+
+缓存占用没有单一的"每 token 多少内存"常数：同一份日志里，带满 checkpoint 的长会话条目约 195 KiB/token，不带 checkpoint 的条目约 47 KiB/token，差额几乎全是那 32 块 checkpoint。按缓存上限 `32768`（单位 MiB）换算，实际容量约为**两个满上下文会话**，第三个不同内容的长会话进来必然淘汰最旧的一个。**因此不要因为"宿主还剩多少内存"去下调缓存额度**：下调只会把跨会话的预填充复用换成更慢的冷启动，而不解决峰值余量。
+
+### 并发与响应时间的读法
+
+- 并行度设为 1 且副本数为 1 时，同一时刻**只有一个活跃解码会话**；第二个用户不是"变慢"而是排队。实测一条 8 token 的极短请求在负载期间往返耗时 26.1 秒（HTTP 200 正常返回），空闲时应在秒级。
+- 不要用日志里的 `t/s`（解码吞吐）代表用户体感；上报体感问题时必须同时给端到端耗时。
+- 若响应"正好慢一倍"，优先排查镜像内置代理是否把同一请求执行了两次。
+- 日志字段陷阱：`timings.prompt_n` **不是**提示词长度，命中缓存时它只计重新计算的那一段；统计提示词长度一律以 `usage.prompt_tokens` 为准。
+
+### 参数取舍边界
+
+- 自适应显存开关在这类部署里是**惰性开关**：入口脚本恒定注入上下文长度与 offload 层数，自适应逻辑遇到已设值直接跳过。既不要指望它缓解显存压力，也不要断言关掉它会启动失败。
+- 上下文 checkpoint 的正确参数名是 `--ctx-checkpoints N`（简写 `-ctxcp`），**`--checkpoints-max` 这个参数不存在**，填错会让推理进程直接启动失败、实例更难恢复。
+- 下调显存看门狗阈值只会让重启更频繁；真正有效的余量手段是缩短上下文、减少 offload 层数、降低 checkpoint 块数或压缩 KV 缓存精度，均须由运维在变更流程内决定并逐项实测。
+- 开发机（96 GB 级宿主）上实测"能自愈"的结论**不可平移**到交付机型；交付最低配为双 RTX 5090 32G，而 64 GB 级内存机型在制图类技能上实测已占用宿主内存 95–97%。现场必须按交付机型实际内存重新核对峰值余量。
+
+### 选型参考依据
+
+`Qwen3-235B-A22B-Instruct-2507-FP8` 的官方模型卡给出总参数 235B、激活参数 22B、原生 262,144 tokens、仅非思考模式，并提供 vLLM / SGLang 的 OpenAI 兼容服务示例；官方 FP8 基准以 4 张 NVIDIA H20 96GB、TP=4 为参考。这应理解为模型装载和性能评估起点，不等同于现场生产配置。`262,144` 上下文会显著增加 KV Cache 和峰值显存压力，建议先以 32K 或 64K 完成上线验收。
+
+GPUStack 侧需要额外确认：server 可运行在无 GPU 的 CPU 节点，worker 节点需要 Linux、GPU 驱动、Docker 和对应容器工具链；多 worker 分布式推理需要 server-to-worker、worker-to-server、worker-to-worker 网络连通；以默认配置为例，管理入口通常使用 TCP `80/443`，worker 和推理服务还可能使用 `10150`、`40000-40063` 以及分布式 vLLM/Ray 的 `41000-41999` 端口范围。手册给出 5 条官方参考链接（Qwen 模型卡与部署文档、推理基准、GPUStack 安装要求与快速开始）。
+
+## 默认值速查
+
+| 项目 | 默认值 |
+| :--- | :--- |
+| 数据库离线包 | `xcsmartdatabase-db-offline-*.tar.gz` |
+| 离线大模型包 | `mapgis-gpustack-windows-cuda-*.tar.gz` |
+| GIS Agent 包 | `gisagent-skills-bundle-*.tar.gz` |
+| Web 管理员账号 | `admin` |
+| Web 管理员密码 | 部署时设置的管理员密码 |
+| GIS Agent Web 入口端口 | `17076` |
+| SkillHub Web 入口端口 | `19081` |
+| SkillHub API 端口 | `19080` |
+| GPUStack UI / API 端口 | `18081`（由离线大模型包提供） |
+| pgAdmin 入口端口 | `5050` |
+| bundle 默认瓦片服务端口 | `3333` |
+| 默认数据库拓扑 | `remote`（传统多机部署） |
+| 数据库离线包默认入口 | `<数据库服务器IP或DNS>:17072` |
+| 默认数据库入口 | 由 `deploy.sh` 交互询问并执行 TCP 预检 |
+| 默认网关入口 | 由 `deploy.sh` 交互询问 |
+| `workspace-data` | 默认保留 |
+
+## 常见问题定位方向
+
+手册技术附录的常见问题表共 48 行现象，按类别归纳如下（现场按类别定位，再回手册查对应行）：
+
+| 类别 | 典型现象 | 定位方向 |
+| :--- | :--- | :--- |
+| 引擎与编排 | `docker: command not found`、`docker compose: command not found` | 缺 Docker Engine 或缺 Compose v2 插件；旧版 `docker-compose` 不满足当前脚本 |
+| 端口职责混淆 | `http://<IP>:18081/` 连接被拒绝 | 该端口属于独立 GPUStack 包；SkillHub 应访问 `19081` |
+| 模型服务 | `/healthz` 成功但 `/v1/models` 为空或 `401` | server 健康不等于 worker 和模型可用；确认 worker `READY`、模型 `RUNNING`、鉴权有效 |
+| 模型接入 | `/v1/chat/completions` 成功，但业务侧没有可选模型 | 模型 ID 要用 `provider-id/model-id` 形式；确认容器内 Base URL 不是 `127.0.0.1` |
+| 协议不匹配 | 把 GPUStack 地址直接填到 `agent-claude` 后失败 | GPUStack 默认提供 OpenAI Chat Completions，Claude 需要 Anthropic Messages 兼容接口 |
+| 数据库连通 | `deploy.sh` 在数据库预检阶段失败 | 先 `nc -vz <数据库服务器IP或DNS> 17072`；再确认数据库已启动、监听非 `127.0.0.1`、入站防火墙放行、出站策略允许 |
+| 跨主机误配 | 多机部署误填容器名，或提示 `xcsmartdatabase-network` 不存在 | 改为 `IP或DNS:17072`；容器名只在同一 Docker daemon 且显式启用同机模式时才有意义 |
+| 会话与沙箱 | 部署全绿、容器都 healthy，但会话一启动就报写不出工作目录 | 见[国产化环境部署](/docs/offline-deploy-kylin)闸门 3；与是否用 root 账号部署无关 |
+| 容器出网 | 能登录、容器健康，但一句话都回不出来 | 宿主 shell 的代理不会自动进容器，见闸门 1 |
+| 授权 | 界面提示「系统未授权」，且不拉起会话容器 | 新机未上传授权，不是部署失败 |
+| 并发 | 多个用户同时使用局域网大模型 | 当前服务按单队列串行处理，后进入的请求排队；需更高并发先扩容模型侧 |
+| 容量 | 本地模型 OOM 或响应极慢 | 降低并发和上下文长度，或提升到能稳定承载 `Qwen3.8-27B-FP8` 及以上模型的多卡环境 |
+| 数据保护 | 希望保留目标机现有数据 | 使用 `./deploy.sh --skip-volumes`；禁止 `docker compose down --volumes` |
+
+手册中另有 14 行现象涉及登录口令、密钥或鉴权注入，属敏感配置范畴，本文只归类不展开具体文件名与字段名。这类问题的现场验证方式是不含敏感信息的：确认服务健康、确认凭据按交付说明注入、确认模型 ID 与实际模型服务一致、确认登录接口返回码。
+
+## 不作为客户承诺的边界
+
+以下内容必须由运维、网络和安全团队确认，手册不写成固定客户承诺（共 9 项）：Linux 发行版与内核、CPU 架构（是否只支持 `x86_64`、是否需要 ARM）、PostgreSQL 版本与磁盘 IOPS、并发量、局域网模型的 GPU 与推理栈版本、高可用方案、企业安全（HTTPS / SSO / LDAP / 审计）、数据增长与磁盘扩容、备份与升级策略。
+
+本页与[部署方案与前提](/docs/offline-deploy-plan)、[国产化环境部署](/docs/offline-deploy-kylin)、[技能影响范围](/docs/offline-deploy)共同构成离线交付的完整检查面；四页都以同一份手册与技能包扫描结果为事实源，手册升版后需同步刷新。

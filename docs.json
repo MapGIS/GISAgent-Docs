@@ -130,6 +130,30 @@
             ]
           }
         ]
+      },
+      {
+        "tab": "离线部署",
+        "groups": [
+          {
+            "group": "影响范围",
+            "pages": [
+              "docs/offline-deploy"
+            ]
+          },
+          {
+            "group": "部署实施",
+            "pages": [
+              "docs/offline-deploy-plan",
+              "docs/offline-deploy-kylin"
+            ]
+          },
+          {
+            "group": "运维附录",
+            "pages": [
+              "docs/offline-deploy-ops"
+            ]
+          }
+        ]
       }
     ]
   },
