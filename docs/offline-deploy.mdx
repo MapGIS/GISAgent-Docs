@@ -120,7 +120,7 @@ title: 离线部署
 
 ## L6 不受影响（7 个）
 
-`cesium-common`、`map-poster-maker`、`maplibre-common`、`self-improving-agent`、`sld-tianditu-gb100`、`spatial-analysis`、`tourism-heatmap`。
+`cesium-common`、`map-poster-maker`、`maplibre-common`、`self-improving-agent`、`spatial-analysis`、`tianditu-1m-atlas`（原名 `sld-tianditu-gb100`）、`tourism-heatmap`。
 
 其中三个属于规范或工具类技能（前端使用约束、三维使用约束、空间分析算子），本身不出图；`spatial-analysis` 的分析库已内置为本地文件；`tourism-heatmap` 直接使用自带的地理数据与内置基准值；`sld-tianditu-gb100` 走本地网关；`map-poster-maker` 通过参数指定本地网关与样式。
 
@@ -178,8 +178,8 @@ title: 离线部署
 | `map-poster-maker` | 本地内置 | 本地/无需 | 无需 | 0 | L6 | `--gateway` `--style` |
 | `maplibre-common` | 不涉及 | 本地/无需 | 无需 | 0 | L6 | `--tk` |
 | `self-improving-agent` | 不涉及 | 本地/无需 | 无需 | 0 | L6 | — |
-| `sld-tianditu-gb100` | 本地内置 | 本地/无需 | 无需 | 0 | L6 | — |
 | `spatial-analysis` | 本地内置 | 本地/无需 | 无需 | 0 | L6 | — |
+| `tianditu-1m-atlas` | 本地内置 | 本地/无需 | 无需 | 0 | L6 | — |
 | `tourism-heatmap` | 本地内置 | 本地/无需 | 无需 | 0 | L6 | — |
 
 ## 离线改造抓手：可覆盖参数
