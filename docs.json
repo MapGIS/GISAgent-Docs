@@ -47,7 +47,8 @@
           {
             "group": "更新日志",
             "pages": [
-              "docs/skills-detailed-update-log"
+              "docs/skills-detailed-update-log",
+              "docs/skills-new-this-week"
             ]
           }
         ]

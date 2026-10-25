@@ -1,0 +1,133 @@
+---
+title: 本周新增技能
+description: 2026-10-19 至 2026-10-25：GitLab subgroup 新增 atlas-earth，CLI 内置链路新增 4 个 MapGIS 技能包；另有 tianditu-1m-atlas 改名与 4 项内容更新。
+---
+
+# 本周新增技能（2026-10-19 – 2026-10-25）
+
+> 本周真正的新增有两条来源：GitLab `xcsmartdatabase/skills` subgroup 的 `atlas-earth`，
+> 以及 CLI 内置链路在 2026-10-20 并入的 4 个 MapGIS 技能包（顶层技能包 13→17）。
+> 同期 `tianditu-1m-atlas` 只是改名，技能本体 2026-10-08 已存在，**不算新增**。
+
+本页只记录“本周窗口内进入运行时”的变化；逐技能、逐提交的长期记录见
+[技能详细更新日志](/docs/skills-detailed-update-log)，同步链路与门禁的工程记录在
+`openspec/changes/sync-skills-from-gitlab/`，镜像索引在
+`config/openspecs/changes/docker-sync-skills/README.md`。
+
+## 速览
+
+| 类型 | 技能／技能包 | 来源链路 | 首次进入运行时 | 当前状态 |
+| :--- | :--- | :--- | :--- | :--- |
+| 新增（GitLab） | `mapviz-skills/atlas-earth` | subgroup → `skillpacks/mapviz-skills/` | 2026-10-21 | active 清单 50→51，运行时 mapviz 49→50；5 个容器可见；阿里云 10-23 凌晨已热更 `-02`，本机卷已按当日 16:17 提交刷新 |
+| 新增（CLI 内置） | `mapgis10-cli` | `clis/mapgis10_cli/skills/` → `skillpacks/` | 2026-10-20 | 顶层技能包 13→17；4 个 agent + gisagent 可见 |
+| 新增（CLI 内置） | `mapgis-database` | 同上 | 2026-10-20 | 同上 |
+| 新增（CLI 内置） | `mapgis-map-cartography` | 同上 | 2026-10-20 | 同上 |
+| 新增（CLI 内置） | `mapgis-sdk-java`（含 6 个模块子技能） | 同上 | 2026-10-20 | 同上 |
+| 改名（非新增） | `mapviz-skills/tianditu-1m-atlas` | GitLab 项目路径改名 | 2026-10-22 | 本机与 5 个运行容器只有新名；阿里云仍是旧名 |
+| 内容更新（非新增） | `atlas-earth`、`tianditu-1m-atlas`、`3d-building-map`、`geoscan-cli` | — | — | 见下文「本周内容更新」 |
+
+## 新增一：`atlas-earth`（GitLab subgroup）
+
+### 技能定位
+
+`atlas-earth` 是真实三维城市场景技能：用 Atlas 渲染器把 Overture 城市数据做成可在 GIS Agent 内预览的
+Cesium 三维页，覆盖建筑、道路、水系、树木、路灯与夜景光照。两种工作模式：
+
+- 用户给了地点或范围：按 bbox 或 `--clip` 多边形下载 PMTiles 并裁切，输出指定范围的三维实景页；
+- 用户没给地点：输出探索页，让用户在城市样例之间切换。
+
+它定位于“真实城市三维场景”本身；只要建筑高度、天际线或容积率专题时应当走 `3d-building-map`，
+两者在同一天都发生了更新，注意分流。
+
+### 上线时间线
+
+| 日期 | 事件 |
+| :--- | :--- |
+| 2026-10-21 | GitLab 仓库建立并提交首个版本（`9e8765f` Initial commit、`ebf8438` 技能正文）；当日同步后 active 清单 50→51 |
+| 2026-10-21 | gisagent 侧随 `55a555d` 打包 Atlas Earth，并提供静态资源 range 支持 |
+| 2026-10-22 | `131db87` 收敛措辞、`5c87c5c` 增加 `--clip` 多边形裁切（新增 `geom-clip.mjs` 与 `vendor/polygon-clipping.esm.js`） |
+| 2026-10-23 | `467dde7` 增加建筑替换与 Atlas 风格 GLB 说明，修正 `vendor/polygon-clipping` 并新增 `vendor/splaytree.js`（+344） |
+| 2026-10-23 | 把多边形裁切依赖内联进 vendor 后热更新阿里云（L0，零重启） |
+| 2026-10-23 | gisagent 侧共 4 个 Atlas 提交：`da34d3b`、`8223b6b`、`394169a`、`3918709`（bundle 与 worker 哈希刷新） |
+| 2026-10-23 20:27 | 本链路在线同步（pull 51／真实更新 0）后提升，刷卷后 5 个容器内均为 25 个文件（含 `splaytree.js`） |
+
+### 注册与运行时
+
+- 清单：`known-skills.manifest` 自动刷新，active 51；运行时 mapviz 50（`mapgis-67` 运行时排除）。
+- 卷：`skillpacks/mapviz-skills/atlas-earth` 提升后，`agent-opencode`、`agent-claude`、`agent-qwen-code`、
+  `agent-qoder` 与 `mapgis-ai-gisagent` 的 `/workspace/skills/mapviz-skills/atlas-earth/SKILL.md` 均在。
+- 阿里云：2026-10-23 定向 L0 热更新（`gisagent-hotfix-L0-atlas-earth-20261023-02`），24 个文件排序清单
+  sha256 `1fbbc314…`，本机源／栈 carrier／命名卷三处一致；`gisagent` 与 4 个 agent 的 `StartedAt` 未变、
+  `RestartCount` 全 0。`-01` 包因缺少 vendor 依赖（容器内 `import` 报 `ERR_MODULE_NOT_FOUND`）被 `-02` 取代。
+
+### 本机核对（2026-10-25 18:xx 同步后）
+
+- 同步：`bash scripts/sync-skills-from-gitlab.sh` → pull 51／真实更新 0／新 clone 0／失败 0；
+  `tianditu-1m-atlas` 的 8 个当日提交与 3 个未提交文件已随提升进入 `skillpacks/`。
+- 刷卷：`docker compose up skillpacks-sync` exit 0；`tianditu-1m-atlas/SKILL.md` 在源、`skillpacks/`
+  与 5 个运行容器内均为 `7a1350c21ffd`。
+- geoscan L0：`bash scripts/sync-geoscan-skill.sh` exit 0，`SKILL.md` 上游＝`skillpacks`＝4 个 agent
+  卷均为 `24ff1a2760e7`；`verify-runtime-skillpacks.sh` **exit 0**，L0／L3 全绿。
+- 注意 `scripts/verify-runtime-skillpacks.sh` 只比对顶层技能包，**不覆盖 `mapviz-skills` 子技能**，
+  子技能的滞后仍按 `sync-report-*.md` 的逐技能 md5 口径核对。
+
+## 新增二：4 个 MapGIS 技能包（CLI 内置）
+
+2026-10-20 由 `scripts/sync-cli-skillpacks.sh` 并入 `skillpacks/`，顶层技能包由 13 个增至 17 个。
+四个包都源自 `clis/mapgis10_cli/skills/`，随 MapGIS 10 Desktop 内嵌进 `postgiscli` 继承链（L3 能力面，
+不是 GitLab subgroup 技能，因此不占 `known-skills.manifest` 的名额）。
+
+| 技能包 | 能力面 |
+| :--- | :--- |
+| `mapgis10-cli` | MapGIS 10 环境与配置查看；数据源、中间件类命令在未授权时返回 139，授权面另见 `references/license.md` |
+| `mapgis-database` | 建地理数据库、SHP 入库简单要素类/要素数据集、导入注册 6x 系统库与符号库 |
+| `mapgis-map-cartography` | 地图配图与 `.mapx` 生成：批量图层、面线点配色、单值专题图、动态注记、多版本 mapx |
+| `mapgis-sdk-java` | MapGIS Java Object 二次开发；含 `mapgis-java-router`、`-geodatabase`、`-geoobjects`、`-geomap`、`-geoanalysis`、`-tooling` 6 个模块子技能 |
+| 合计 | 10 个 `SKILL.md`（4 个顶层 + 6 个模块） |
+
+验收口径：4 个包在 `skillpacks/` 与 5 个运行容器的 `/workspace/skills/` 下均在；镜像侧权限、授权禁入与
+139 漂移闸门由 `scripts/build-agents.sh` 与 `package.sh` 守护（见
+`config/openspecs/changes/docker-mapgis10-cli-integration/README.md`）。
+
+## 改名（非新增）：`tianditu-1m-atlas`
+
+`sld-tianditu-gb100` 于 2026-10-22 改名为 `tianditu-1m-atlas`。技能能力已从单一底图扩到“三套底图＋
+两套水系专题＋地质 overlay”、省域遮罩、统计卡与电子／传统版面，原名不再能说明它。
+
+- 改名顺序是硬约束：先改 GitLab 项目路径，再改本地目录与 `origin`，最后同步；否则下次同步会按远端旧名重拉。
+- 结果：推送 `b6e02ae..067c3b8`；同步 pull 51／失败 0，清单自动刷新；本机与 5 个运行容器只有新目录，
+  旧名 `sld-tianditu-gb100` 已不在卷内。
+- 历史边界：技能 2026-10-08 起本地暂存、2026-10-18 建 GitLab 仓库，因此**不是本周新增**；
+  历史同步报告与热更新记录保留旧名。
+- 遗留：阿里云栈目录与卷仍是旧名，下次 L0 热更新要“新增新目录＋移除旧目录”，否则线上并存两份同内容技能。
+
+## 本周内容更新（非新增）
+
+| 技能 | 变更 |
+| :--- | :--- |
+| `atlas-earth` | `--clip` 多边形裁切与 vendor 依赖内联；10-23 `467dde7` 再增建筑替换、Atlas 风格 GLB 说明与独立 `vendor/splaytree.js`，已进本机 skillpacks 与运行时卷，阿里云尚未跟进该提交 |
+| `tianditu-1m-atlas` | 改名之外 10-18–10-22 共 33 个提交：水系台账联动、地质版面与地层柱、GB/T 20257.1 图廓、图面整饰统一等；10-25 又增 8 个提交（std 制图综合手册、GB/T 20257.1 4.9 注记字体、图例按实际画法重排、`qianhu` 更名“湖泊水网”），另有 3 个未提交文件一并进卷 |
+| `3d-building-map` | 2026-10-22 真实 fast-forward（`1b35724`）：WFC 地标塑形，按父建筑着色与查询；`fetch-buildings.mjs` +483/−36，`assets/template.html` +52/−18 |
+| `geoscan-cli` | 2026-10-21 L0 技能正文更新（1:5 万专项流程、标准交付流程、`mapgis_geography_color_palette.json`、`vendor/geoscan_cli_v22/`）；同日 L3 `chart_pipeline.py` 重建，上游＝packaged＝4 个 agent conda 均为 `5e6854f38ef6`。10-25 上游 `ocr-cli/skills/geoscan-cli` 当日 19 个提交（像素坐标 QGS 流程、图框/裁切、OCR 标注与上下标修正），已 L0 同步进卷（`SKILL.md` = `24ff1a2760e7`） |
+
+## 本周同步与门禁记录
+
+| 日期 | active 清单 | pull | 真实更新 | 提升 | 门禁／备注 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| 2026-10-18 | 50 | 50 | 0 | 49 | 运行时一致；`tianditu` 仓库建立 |
+| 2026-10-19 | 50 | 50 | 0 | 49 | 门禁 exit 0（geoscan L0 漂移已消除） |
+| 2026-10-20 | 50 | 50 | 0 | 49 | 门禁红在 geoscan L0 上游漂移；同日 CLI 链路新增 4 个 MapGIS 包 |
+| 2026-10-21 | 51 | 51 | 0 | 50 | `atlas-earth` 进卷；geoscan L0＋L3 修复后门禁 exit 0 |
+| 2026-10-22 | 51 | 51 | 1（`3d-building-map`） | 50 | `tianditu` 改名；同日记录 geoscan L0 上游再次漂移 |
+| 2026-10-23 | 51 | 51 | 0 | 50 | 20:27 跑完在线同步并刷卷；门禁 exit 1 仅 geoscan L0 上游漂移（`6d09b19cd017` ≠ `3eadf8f4392b`），L3 四方一致；`atlas-earth` 今日提交已进卷 |
+| 2026-10-25 | 51 | 51 | 0 | 50 | 在线同步 pull 51／失败 0；`tianditu-1m-atlas` 含未提交改动一并进卷；geoscan L0 同步后门禁 **exit 0**（L0／L3 全绿） |
+
+## 口径说明
+
+- **算新增**：本周内首次进入 GitLab subgroup 清单并提升到 `skillpacks/`／运行时卷的技能；本周内首次
+  由 CLI 内置链路并入 `skillpacks/` 的技能包。
+- **不算新增**：改名、内容更新、以及 `skills/` 下的本地缓存目录
+  `agent-orchestration-improve-agent`、`evolution`、`postgis-3dtiles`、`ui-ux-pro-max-skill`
+  ——它们不在 subgroup 清单内，不参与 `skillpacks/mapviz-skills/` 提升，也不能作为阿里云一致性统计依据。
+- 文档站内描述 `mapviz-skills` 规模的历史页面（如[离线部署](/docs/offline-deploy)按 49 个技能统计）
+  尚未按新增后的 50 个重算，属于待跟进的口径差异。
