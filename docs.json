@@ -72,7 +72,8 @@
             "group": "协作方法",
             "pages": [
               "docs/vibe-code",
-              "docs/vibe-code-cases"
+              "docs/vibe-code-cases",
+              "docs/vibe-code-modes"
             ]
           }
         ]
