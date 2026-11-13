@@ -1,0 +1,296 @@
+---
+title: 龙芯 + 统信 UOS
+description: LoongArch64 信创第二基线：实测环境、B1 混合部署、MapGIS 边界、镜像打包与 52 例 E2E 结果
+tag: New
+---
+
+# 龙芯 + 统信 UOS 信创适配
+
+> 本文是第二条信创基线，和 [x86 + 银河麒麟 V11](/docs/offline-deploy-kylin) 并列；两条基线的结论不能互相外推。
+> 一句话：**除 MapGIS 10 与 claude 2.x 外，GIS Agent 主站、知识库、数据层、GIS 工具链和可用的 AI Agent 运行时（opencode / qwen-code / qoder）已在 LoongArch64 上跑通；MapGIS 相关能力仍需 x86 服务器承载。**
+
+## 一、结论与边界
+
+| 能力 | 龙芯状态 | 说明 |
+| :--- | :--- | :--- |
+| GIS Agent 主站 / Web | **可用** | 无 MapGIS 可单机；需要 MapGIS 时走 B1，gisagent 留 x86 |
+| 知识库 MCP | **可用** | `knowledge-mcp-http`，`/mcp` 返回 200 |
+| PostgreSQL / PostGIS | **可用** | 源码编译，PostGIS 3.6 |
+| GIS 工具链 | **可用** | GDAL / PROJ / postgiscli / 3dtiles_cli / postgis_service_cli 等 |
+| AI Agent | **部分可用** | opencode（Node 24 移植）、qwen-code、qoder 可用；claude 2.x 无 loong64 |
+| MapGIS 10 系列 | **不可用** | 厂商只提供 x86-64 包，龙芯上预期 `exec format error` |
+| 52 例 E2E | **51 例有实质回复** | 自动化检测通过 30 例；失败/超时主要是系统浏览器 WebGL 假死 |
+| 性能 / 并发承诺 | **不承诺** | 4C / 31GB 是验证机，不是生产配置 |
+
+**三条硬边界：**
+
+1. **MapGIS 不在龙芯支持范围内**。MapGIS 10 安装包是 x86-64 ELF，`postgiscli` 与 4 个内置 agent 镜像都继承它；强行运行会在启动阶段报 `exec format error`，不是配置错误。
+2. **AI Agent 不是全部可移植**。opencode 已移植到 Node 24/loong64；qwen-code、qoder 可用；claude 2.x 是平台原生二进制，没有 loong64 版本。
+3. **E2E 不是 52/52 全绿**。52 例中 51 例有完整助手回复，自动化检测通过 30 例；6 失败 / 16 超时集中在系统浏览器长时间 WebGL 渲染，不能据此判定 agent 功能失败。
+
+## 二、两条信创基线怎么选
+
+| 现场条件 | 推荐基线 |
+| :--- | :--- |
+| x86_64 + 麒麟 V11；需要 MapGIS 全栈 | [x86 + 银河麒麟 V11](/docs/offline-deploy-kylin) |
+| 龙芯 LoongArch64 + 统信 UOS；不需要 MapGIS | **本文**：单机或容器化部署无 MapGIS 部分 |
+| 龙芯 + UOS，但业务必须用 MapGIS | **B1 混合拓扑**：gisagent + MapGIS agent 留 x86，龙芯承载数据库/知识库 |
+| 只有龙芯、且必须全栈含 MapGIS | 当前不支持；需要 MapGIS 厂商的 loongarch64 包，或增加 x86 服务器 |
+
+## 三、实测环境基线
+
+下表是最终验证机的主要读数；信创现场版本差异大，**部署前必须用只读命令对账**。
+
+| 项目 | 实测值 | 取值命令 |
+| :--- | :--- | :--- |
+| 整机 | 浪潮 CE520L | `cat /sys/class/dmi/id/product_name` |
+| CPU | 龙芯 3A5000LL，4 核 4 线程，`loongarch64` | `lscpu` / `uname -m` |
+| 内存 | 31 GiB（+ 15 GiB swap） | `free -h` |
+| 磁盘 | NVMe 465G；`/data` 约 267G | `lsblk` / `df -h` |
+| 操作系统 | 统信 UOS V25 Professional（早期基线 UOS 20 1070） | `grep PRETTY_NAME /etc/os-release` |
+| 内核 | `6.6.0-loong64-desktop`（早期 4.19，升级过 5.10） | `uname -r` |
+| glibc | `2.38`（早期 UOS 20 为 `2.28`） | `getconf GNU_LIBC_VERSION` |
+| cgroup / 存储 | cgroup v1；overlay2 | `docker info` |
+| 容器引擎 | Docker 26 + Compose 1.29（最终；早期 20.10.3 + 自编译 Compose 5.6.1） | `docker version` / `docker compose version` |
+| Node | Node 24.12.0（opencode）、Node 20（应用） | `node -v` |
+| 数据库 | PostgreSQL 17.11 + PostGIS 3.6.4（源码编译；客户端 psql 16 也可用） | `psql -p <端口>` / `postgis_version()` |
+| 推理硬件 | 仅龙芯集显，无独立推理卡 | `ls /dev/dri` |
+
+> **版本提示**：早期 UOS 20 / glibc 2.28 / Docker 20.10.3 环境也能跑，但需要按“老引擎”处理挂载垫片；最终验证环境是 UOS V25 + Docker 26，步骤更简单。不要把两套版本的具体读数混用。
+
+## 四、推荐拓扑：B1 混合架构
+
+龙芯上最容易踩的坑，是“想把 MapGIS 也搬过来”。正确做法是承认边界，把 MapGIS 相关部分留在 x86：
+
+```text
+┌─────────────────────────────┐        ┌──────────────────────────────┐
+│ x86_64 服务器                │        │ 龙芯 LoongArch64 + UOS        │
+│                             │        │                              │
+│ gisagent（Web / 编排）       │──TCP──▶│ PostgreSQL 17 + PostGIS 3.6  │
+│ postgiscli / MapGIS agent   │ :17072 │ systemd，宿主原生             │
+│ agent-claude/opencode/...   │        │                              │
+│                             │──HTTP─▶│ knowledge-mcp-http           │
+│                             │ :18088 │ docker，/mcp                  │
+└─────────────────────────────┘        └──────────────────────────────┘
+```
+
+为什么“需要 MapGIS 时”gisagent 不放在龙芯：
+
+- gisagent 通过**本地** docker socket 创建 ACP 会话容器；MapGIS agent 只能在 x86 跑，gisagent 在龙芯就调度不到它们。
+- 远程 Docker 需要改产品代码，不在当前版本范围。
+- B1 保持产品代码不变，只把“无 MapGIS 依赖”的服务放到龙芯。
+
+如果业务确认**不需要 MapGIS**，龙芯也可以单机跑 gisagent + qwen-code/opencode + 数据层；只是不能用 MapGIS 系列技能。
+
+## 五、部署流程（精简版）
+
+### 5.1 先做只读探测
+
+```bash
+uname -m
+getconf GNU_LIBC_VERSION
+grep PRETTY_NAME /etc/os-release
+docker version
+docker info
+docker compose version
+```
+
+期望：
+
+- `uname -m` = `loongarch64`；
+- `docker version` 同时有 Client 和 Server；
+- `docker info` 能看到 `Storage Driver: overlay2`、`Cgroup Version: 1`；
+- `docker compose version` 能出版本。
+
+### 5.2 容器引擎与编排
+
+- UOS 官方源通常**没有**可用的 Docker 引擎包；需要离线 deb，或从麒麟 V10 SP3 的 loongarch64 RPM 解包安装。
+- 早期环境可用 Docker 20.10.3 + containerd 1.4.3；最终验证环境为 Docker 26 + Compose 1.29。
+- 老引擎（`API < 1.45`）不支持 `volume-subpath`，需要挂载垫片；垫片必须放在镜像内 `/usr/local/bin/docker`，因为 agent 的 `runtime.env.PATH` 只认标准目录。
+- `daemon.json` 建议：`data-root` 放 `/data/docker`、`overlay2`、关闭 seccomp 限制（UOS/loong64 内核与默认 seccomp 不兼容）。
+
+### 5.3 基础镜像必须用 UOS rootfs
+
+**不要用 Debian/Alpine 的 loong64 基础镜像**：它们的 8 字节 sigset 与本机内核要求的 16 字节不一致，表现为 `select() returned error: Invalid argument`、`timeout: sigprocmask: Invalid argument`，甚至 Go 二进制启动即 SIGSEGV。
+
+推荐链路：
+
+```text
+UOS rootfs → uos:<版本>-loong64（示例 uos:20-loong64）→ node:20-loong64 / node:24-loong64 → 应用镜像
+```
+
+注意 UOS rootfs 的坑：
+
+- `/usr` 是独立 overlay 挂载，打包时不要用 `--one-file-system`；
+- 排除 UOS 安全模块路径，否则 `docker import` 可能 EPERM；
+- 排除过度会丢 `libusec.so.1`，导致镜像内 `useradd` 失败；
+- 基础镜像内要显式创建 `/tmp` 并 `chmod 1777`。
+
+### 5.4 构建/导入镜像
+
+需要构建或导入的 loong64 镜像：
+
+- `gisagent`
+- `knowledge-mcp-http`
+- `postgis-gateway`
+- `agent-qwen-code`
+- `agent-qoder`
+- `agent-opencode`
+
+跳过：
+
+- `agent-claude`（2.x 无 loong64 原生包；1.x 会话不可用）
+- `postgiscli` 与 MapGIS 系列（x86-64 ELF）
+- `hello-mcp`、amd64 helper（未构建/不适用）；`ocr_cli` 镜像未纳入本包，OCR 由 geoscan + tesseract 回退提供
+
+`package.sh` 已带 loong64 分支：`MAPGIS_SUPPORTED=0`、`LOONG64_READY_IMAGES`、`assert_no_mapgis_layer`。打包前逐镜像校验 `Architecture = loong64`，不要把 amd64 镜像 load 到龙芯。
+
+### 5.5 数据层：源码编译 PostgreSQL/PostGIS
+
+既有 x86 离线包不能直接用：早期 UOS 20 的 glibc 2.28 低于 PG17 离线包要求的 2.34。最终验证环境用源码编译：
+
+- PostgreSQL 17.11
+- GEOS 3.12.2
+- PROJ 9.3.1
+- PostGIS 3.6.4
+
+落地到 `/data/gis-stack`（`pgsql/` + `deps/` + `data/` + `etc/`），systemd 托管，监听 17072。关键点：
+
+- `postgres` 专用系统用户 + `RemoveIPC=no`，否则 logind 会删掉 PG 共享内存；
+- `psql` / `initdb` 必须显式带 `-p 17072`；
+- `postgis-3.so` 与 `libgeos_c.so.1` / `libproj.so.25` 要固化 rpath，DT_RUNPATH 不传递二级依赖；
+- 验收：`SELECT postgis_version();` 返回 3.6，`ST_Transform` / `ST_Buffer` / `ST_AsMVT` 可用。
+
+### 5.6 部署 gisagent / knowledge MCP
+
+B1 使用 `compose-b1-loong64.yml`，两个服务：
+
+| 服务 | 端口 | 说明 |
+| :--- | :--- | :--- |
+| `gisagent` | 17076 → 3000 | 产品标准入口，容器内 `GISAGENT_HOST=0.0.0.0` |
+| `knowledge-mcp-http` | 18088 | 知识库 MCP，`MCP_HTTP_HOST=0.0.0.0` |
+
+四条接线必须满足：
+
+1. **挂完整的 `agent.json`**，不要用只含一项的最小配置替换，否则内置 4 个 agent 全部消失；
+2. `__BUNDLE_ROOT__` 替换成**宿主路径**（agent 容器由宿主 daemon 创建，bind 源必须是宿主路径）；
+3. 挂 `/var/run/docker.sock`；
+4. 挂 `gisagent-workspace-data` 卷到 `/workspace`，并预创建网络、卷、skill 子目录。
+
+admin 必须同时配 `GISAGENT_ADMIN_USERNAME` / `GISAGENT_ADMIN_EMAIL` / `GISAGENT_ADMIN_PASSWORD`，缺一个就会退化为“需要已有 admin 用户”，表现为登录报账号密码错误。密码放同目录 `.env`（600），不要写进仓库。
+
+### 5.7 授权：双指纹
+
+龙芯上宿主与容器的机器指纹不同：
+
+- 宿主：`machine_id` 有值，`cpu_id` / `system_uuid` 可能为空；
+- 容器：`machine_id` 可能不同，`system_uuid` 可能被容器运行时填充。
+
+处理：容器挂载宿主 `/etc/machine-id`，签发**双指纹**许可证（宿主 + 容器都覆盖）。`product_uuid` / `board_serial` 为空时，确认 fallback 来源，避免换机免重签或同机重复签发。
+
+### 5.8 Agent 与模型
+
+- **qwen-code**：纯 JS 入口，可在龙芯跑。镜像内必须有 uid 1001 的 passwd 条目；每个用户的 runtime home 卷要 `chown -R 1001:1001`。Coding Plan key 走 `https://coding.dashscope.aliyuncs.com/v1`，不是普通 DashScope 兼容端点。
+- **opencode**：官方基于 Bun，无 loong64；已移植到 Node 24（better-sqlite3、node-pty、watcher-shim 等），作为原生 ACP agent 可用。
+- **qoder**：已构建 loong64 镜像；home 卷同样要改属主。
+- **claude 2.x**：平台原生二进制，无 loong64，不要浪费时间。
+- **内置 4 个 docker-user-container agent**：依赖 x86 MapGIS 镜像；龙芯上应使用原生 agent，或把 agent 面留在 x86（B1）。
+
+### 5.9 验收判据
+
+```bash
+docker image inspect <image> --format '{{.Architecture}}'   # 期望 loong64
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:17076/       # 302/200
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:18088/health # 200
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:18088/mcp    # 200
+```
+
+阴性对照：
+
+- 把 amd64 镜像 load 到龙芯，运行应报 `exec format error`；
+- 未授权时新建会话应返回“系统未授权”，而不是假装成功；
+- Provider 连接矩阵应 32/32 通过；
+- 原生 opencode 用户级用例应 PASS（登录→绑定→建会话→发消息→收到回复）。
+
+## 六、三个关键缺陷（已修复）
+
+| 缺陷 | 现象 | 根因 | 修复 |
+| :--- | :--- | :--- | :--- |
+| 会话创建后永不回复 | prompt 返回 202，界面一直“思考中”；重启 gisagent 恢复 | `ensureRuntimeForSession` 只查记录、不查 ACP 子进程是否存活，死运行时被复用 | 增加运行时存活检查（`stoppingForIdle` / `proc.killed` / `exitCode`），失效则重建 |
+| 技能市场显示 0 | `/api/skills` 为空，agent 读不到 SKILL.md | 重编镜像时丢了 `/app/skills` 与 `/workspace/skills` | 补齐 16 包 / 77 技能，docker commit 固化，构建脚本加非空断言 |
+| Agent 不调用技能 | 技能“通过”但 `tool_calls=0`，模型自由发挥 | 技能清单只喂给前端市场，没有注入 agent 上下文 | 生成 `SKILL-INDEX.md`，注入 opencode instructions，让 agent 先读 SKILL.md 再执行 |
+
+这三个都不是 LoongArch 指令集问题，而是**运行时、镜像、技能注入**的工程问题；换架构时同样要检查。
+
+## 七、能力矩阵
+
+| 能力 | 状态 | 说明 |
+| :--- | :--- | :--- |
+| 地图可视化 / Cesium | 可用 | — |
+| SLD 样式 / ui-ux-pro-max | 可用 | — |
+| postgis 矢量瓦片 | 可用 | — |
+| knowledge-cli（MCP） | 可用 | 容器内 `/mcp` 200 |
+| 3dtiles 基础转换 | 可用 | — |
+| 3dtiles LAZ | 可用 | `lazrs` 交叉编译 |
+| 3dtiles IFC | 可用（构件级 + 楼层属性） | — |
+| geomoder / gempy 建模 | 可用 | 依赖已补齐 |
+| postgis 栅格渲染 | 可用 | Xvfb 无头 + 软渲染 |
+| geoscan OCR | 可用（tesseract 回退） | onnxruntime 仍无 loong64 |
+| opencode / qwen-code / qoder | 可用 | opencode 为 Node 24 移植版 |
+| agent-claude 2.x | 不可用 | 平台原生二进制，无 loong64 |
+| MapGIS 10 系列 | **不可用** | 厂商仅 x86-64 包 |
+
+### E2E 结果怎么读
+
+- **52 例中 51 例**会话里有完整助手回复（472–935 字），说明 agent 侧确实执行了任务；
+- **自动化检测通过 30 例**；6 失败 / 16 超时，集中在系统浏览器（deepin browser）长时间 WebGL 渲染后假死/变慢；
+- 失败/超时项不是 agent 没回复，而是 Playwright 选择器/浏览器渲染问题；
+- 不要把“自动化 30/52”写成“功能 30/52”，也不要把“51/52 有回复”写成“52/52 全通过”。
+
+## 八、常见坑速查
+
+| 症状 | 根因 | 处理 |
+| :--- | :--- | :--- |
+| `select() returned error: Invalid argument` / Go 二进制 SIGSEGV | Debian/Alpine loong64 的 8 字节 sigset 与内核 16 字节不匹配 | 用 UOS rootfs 做基础镜像；Go 工具链打 16 字节 sigset 补丁 |
+| `docker import` EPERM | UOS 安全模块路径被打进 rootfs | 排除 `*uos*`、`*usec*`、`*filearmor*`、`*deepin*`；但注意别把 `libusec.so.1` 排掉 |
+| 镜像里没有 `/tmp`，agent 写临时文件 EACCES | rootfs 打包排除了 `./tmp` | 基础镜像 `RUN mkdir -p /tmp && chmod 1777 /tmp` |
+| `invalid argument "...volume-subpath..."` | `Docker < 25` 不支持 volume-subpath | 挂载垫片改写为 bind；垫片放镜像内 `/usr/local/bin/docker` |
+| 下拉只剩一个 agent | 用最小 `agent.json` 替换了原文件 | 整体挂载或在原文件上追加，绝不替换 |
+| 登录报账号密码错误，但密码没错 | admin 三个环境变量缺一个 | 同时配 username/email/password，密码放 `.env` |
+| `SystemError: uv_os_get_passwd returned ENOENT` | 镜像里没有 uid 1001 的 passwd 条目 | 建 uid 1001 用户（`-g 1001`） |
+| qwen / qoder 写 home 报 EACCES | runtime home 卷属主是 root | `chown -R 1001:1001` |
+| `invalid_api_key`（key 有效） | Coding Plan key 只认 `coding.dashscope.aliyuncs.com/v1` | 换 base URL |
+| PG 共享内存被删 / 连不上 | logind `RemoveIPC=yes`；`psql` 没带 `-p` | 专用 postgres 用户 + `RemoveIPC=no`；命令显式带端口 |
+| tsc 在龙芯崩溃 | Node/TS 在 loong64 的兼容问题 | 在 x86 开发机编译，把 `dist/` 同步过去 |
+| `ERR_DLOPEN_FAILED` better-sqlite3 | 镜像 ABI 与容器 Node 版本不一致 | 用目标 Node 版本 `npm rebuild better-sqlite3 --build-from-source` |
+| 容器启动即 `exec format error` | 把 amd64 镜像 load 到龙芯 | 打包/部署前校验 `Architecture = loong64` |
+
+## 九、交付物与复现
+
+配套交付物（按内部交付流程提供，不在公网文档直接挂载）：
+
+- 《龙芯 UOS-GISAgent 适配汇报》PPT / 单文件 HTML（16 页）
+- 《龙芯 UOS-GISAgent 测试报告》DOCX
+- `docker-uos-xinchuang-adaptation` change 目录：环境基线、B1 部署、LoongArch 打包、opencode 移植、集成测试、能力边界、踩坑清单
+
+可复现脚本（仓库内）：
+
+- `build-gisagent-image-loongarch64.sh`
+- `build-node-app-image-loongarch64.sh`
+- `build-compose-loongarch64.sh`
+- `package.sh` 的 loong64 分支
+- `compose-b1-loong64.yml`
+- `assets/verify.sh`
+
+本文只给判据和边界，不展开每个脚本的全部参数；现场按 change 目录的 `B1-DEPLOYMENT.md` / `PACKAGING-LOONG64.md` 执行。
+
+## 十、结论
+
+- **不需要 MapGIS**：龙芯 + UOS 可以作为独立信创基线交付，主站、知识库、数据层、GIS 工具链和可用的 Agent 运行时（opencode / qwen-code / qoder）均可跑；claude 2.x 与 MapGIS 不在内。
+- **需要 MapGIS**：用 B1 混合拓扑，gisagent + MapGIS agent 留 x86，龙芯承载数据库/知识库；不要承诺 MapGIS 在龙芯运行。
+- **全栈国产化且必须含 MapGIS**：当前不成立，需等 MapGIS 厂商提供 loongarch64 包，或增加 x86 服务器。
+- **性能/并发**：4C/31GB 验证机不能作为生产配置承诺；按实际业务量和[部署方案与前提](/docs/offline-deploy-plan)重新评估。
+
+***
+
+**使用提示：** 先回答三个问题再选型——"CPU 是 x86 还是龙芯？""业务是否必须用 MapGIS？""是单机还是 x86 + 龙芯混合？" 三个答案决定用哪条基线，不要拿麒麟 x86 的结论直接套龙芯。

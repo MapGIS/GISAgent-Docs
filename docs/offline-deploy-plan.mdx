@@ -6,7 +6,7 @@ description: 私有化部署要准备几台服务器、每台做什么、网络�
 # 部署方案与前提
 
 > 本页与[离线部署：技能影响范围](/docs/offline-deploy)配对使用。那页回答"技能层面哪些环节会在离线时断"，本页回答"要准备几台机器、每台做什么、网络怎么连、部署前检查什么"。
-> 内容取自《GIS Agent 离线部署用户手册》V3.25（2026-10-18）第一至第六章；命令级细节、实际案例与故障处理见[实施与运维要点](/docs/offline-deploy-ops)，国产化现场见[国产化环境部署](/docs/offline-deploy-kylin)。
+> 内容取自《GIS Agent 离线部署用户手册》V3.25（2026-10-18）第一至第六章；命令级细节、实际案例与故障处理见[实施与运维要点](/docs/offline-deploy-ops)，信创现场见[x86 + 银河麒麟 V11](/docs/offline-deploy-kylin) 和[龙芯 + 统信 UOS](/docs/offline-deploy-loongarch)。
 
 一句话结论：私有化部署通常按 **3 台机器** 规划——数据库服务器、GIS Agent 业务服务器、Token 服务器。三台机器职责分离，用户只访问 GIS Agent 业务服务器。
 
@@ -156,7 +156,7 @@ GIS Agent 包对模型能力的最低要求是不低于 `Qwen3.8-27B-FP8`。首�
 8. 上传离线包，按"数据库 → 局域网模型（如有）→ GIS Agent"的顺序部署。
 9. 用浏览器访问 `http://<GIS-Agent-IP>:17076/`，登录后完成授权。
 
-清单全绿只代表"环境具备了"，不代表"能对话"。验收判据见[实施与运维要点](/docs/offline-deploy-ops)的部署后验收一节；国产化现场还要再叠加四道闸门，见[国产化环境部署](/docs/offline-deploy-kylin)。
+清单全绿只代表"环境具备了"，不代表"能对话"。验收判据见[实施与运维要点](/docs/offline-deploy-ops)的部署后验收一节；信创现场还要再叠加对应基线的闸门，见[x86 + 银河麒麟 V11](/docs/offline-deploy-kylin) 或[龙芯 + 统信 UOS](/docs/offline-deploy-loongarch)。
 
 ## 与技能影响范围的关系
 

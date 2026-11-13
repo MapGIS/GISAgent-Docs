@@ -73,7 +73,8 @@
             "pages": [
               "docs/vibe-code",
               "docs/vibe-code-cases",
-              "docs/vibe-code-modes"
+              "docs/vibe-code-modes",
+              "docs/vibe-code-quota"
             ]
           }
         ]
@@ -123,6 +124,17 @@
         ]
       },
       {
+        "tab": "三维模型",
+        "groups": [
+          {
+            "group": "模型接入",
+            "pages": [
+              "docs/3d-model"
+            ]
+          }
+        ]
+      },
+      {
         "tab": "路网规划",
         "groups": [
           {
@@ -145,8 +157,14 @@
           {
             "group": "部署实施",
             "pages": [
-              "docs/offline-deploy-plan",
-              "docs/offline-deploy-kylin"
+              "docs/offline-deploy-plan"
+            ]
+          },
+          {
+            "group": "信创环境",
+            "pages": [
+              "docs/offline-deploy-kylin",
+              "docs/offline-deploy-loongarch"
             ]
           },
           {

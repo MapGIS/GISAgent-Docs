@@ -6,3 +6,28 @@ html {
 #chat-assistant-sheet {
   visibility: visible !important;
 }
+
+/* 本周新增：顶部 tab 右上角的小蓝点 */
+a.nav-tabs-item[href="/docs/spatial-crs"],
+a.nav-tabs-item[href="/docs/vibe-code"],
+a.nav-tabs-item[href="/docs/3d-model"],
+a.nav-tabs-item[href="/docs/offline-deploy"] {
+  position: relative;
+}
+
+a.nav-tabs-item[href="/docs/spatial-crs"]::after,
+a.nav-tabs-item[href="/docs/vibe-code"]::after,
+a.nav-tabs-item[href="/docs/3d-model"]::after,
+a.nav-tabs-item[href="/docs/offline-deploy"]::after {
+  content: "";
+  position: absolute;
+  top: 12px;
+  right: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #2979ff;
+  border: 1px solid #fff;
+  pointer-events: none;
+  z-index: 2;
+}
