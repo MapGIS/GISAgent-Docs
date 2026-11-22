@@ -77,26 +77,66 @@ description: x86_64 + 银河麒麟 V11 离线现场基线：四道闸门、源�
 | 端口类型 | 例子 | 实测（由同网段另一台机器发起） | 结论 |
 | :--- | :--- | :--- | :--- |
 | 容器发布端口 | Web `17076`、Gateway `3333` | 可达，分别返回 `302` 与 `200` | 由 Docker 的转发规则承载，通常无需额外放行 |
-| 宿主自建进程端口 | 离线 PostgreSQL `17072` | **被拒**，报"没有到主机的路由" | 需要显式放行，否则其它机器连不上 |
-| 同一端口，从容器内访问宿主 | `17072` | 实测连通，栈保持 healthy | 容器到宿主这条链路不受该限制，别把它当成部署失败 |
+| 宿主自建进程端口 | 离线 PostgreSQL `18084` | **被拒**，报"没有到主机的路由" | 需要显式放行，否则其它机器连不上 |
+| 同一端口，从容器内访问宿主 | `18084` | 实测连通，栈保持 healthy | 容器到宿主这条链路不受该限制，别把它当成部署失败 |
 
 即**只有"跨机器直连宿主自建数据库"这一种场景需要动防火墙**。放行命令（按现场端口替换，需 root）：
 
 ```bash
-firewall-cmd --permanent --add-port=17072/tcp
+firewall-cmd --permanent --add-port=18084/tcp
 firewall-cmd --reload
 ```
 
-判据必须能失败：放行前后各跑一次 `nc -vz <数据库服务器> 17072`，期望从不可达变为 `succeeded`。放行后仍不通，再查数据库自身的 `listen_addresses` 与认证配置，不要先怀疑本产品。
+判据必须能失败：放行前后各跑一次 `nc -vz <数据库服务器> 18084`，期望从不可达变为 `succeeded`。放行后仍不通，再查数据库自身的 `listen_addresses` 与认证配置，不要先怀疑本产品。
+
+## 基础容器环境（Docker + Compose）
+
+交付包**不含 Docker**，现场要么已有可用的 docker，要么先装基础环境包：
+
+```bash
+tar -xzf docker-offline-amd64-27.5.1-*.tar.gz
+cd docker-offline-amd64-27.5.1-*/
+./install.sh --check                 # 自检（不需 root）
+sudo ./install.sh --data-root /data/docker --user <部署账号>
+```
+
+包内是 Docker 27.5.1 + Compose v2.32.4 的**静态二进制**（不依赖麒麟/UOS 源，也不改系统包数据库），
+带 systemd 单元与 install/uninstall，可原地升级与回滚。装完 `docker version`、`docker compose version` 均应可用。
+arm64 用 `docker-offline-arm64-*`；loongarch64 官方无静态包，改用
+`scripts/gis-data-layer/install-docker-loongarch64-offline.sh`。
+
+### 从发行版 moby 升级到静态 Docker（实测 24.0.9 → 27.5.1）
+
+三条必须守住，否则容器起不来或数据"看起来丢了"：
+
+1. **保持 `cgroupdriver=cgroupfs`**。麒麟自带的 moby 用的是 cgroupfs，而新版 dockerd 在 cgroup v2 上默认 `systemd`；直接换驱动会让存量容器启动失败。升级前先在 `daemon.json` 写死：
+   `{"data-root":"/var/lib/docker","exec-opts":["native.cgroupdriver=cgroupfs"]}`
+2. **containerd 要单独成服务**。静态包里的 dockerd 只是 containerd 的客户端；moby 包常把 `containerd.service` mask 成 `/dev/null`，必须先 `systemctl unmask containerd`，再装 containerd 单元并 `enable`，否则 dockerd 报
+   `failed to dial /run/containerd/containerd.sock: context deadline exceeded`。
+3. **数据目录原地复用**。`data-root` 必须与升级前一致（`docker info --format '{{.DockerRootDir}}'`）。升级前先备份 `docker ps -a` / `images` / `volume ls` 清单，升级后逐项对数。
+
+回滚方式（发行版二进制仍在 `/usr/bin`）：
+
+```bash
+sudo systemctl stop docker.socket docker.service containerd
+sudo rm -f /etc/systemd/system/{docker.service,docker.socket,containerd.service}
+sudo systemctl daemon-reload
+sudo systemctl start docker.socket docker.service     # 回到发行版版本
+```
+
+实测结果（`.71`，2026-11-21）：112G 数据目录、48 镜像、16 容器、13 卷全部继承；daemon API 1.43 → **1.47**，会话工作区从 `shim` 档自动切到 **`native`**；`deploy.sh` 冒烟 0 错误、9 容器 healthy、`17076→301` / `3333→200` / `18088→200`。
 
 ## 数据库离线包在麒麟上的落地要点
 
 交付的 PostgreSQL 17 + PostGIS 离线包在 Ubuntu 24 上构建，**在麒麟上可直接运行，不要重编**：其二进制最高只依赖 `GLIBC_2.34`，低于麒麟 V11 的 glibc `2.38`。需要处理的只有共享库和参数。
 
 1. **PostGIS 缺 7 个共享库**：`libcurl-gnutls.so.4`、`libjbig.so.0`、`libjpeg.so.8`、`libdeflate.so.0`、`libbz2.so.1.0`、`librtmp.so.1`、`libsasl2.so.2`。补入包的 `lib` 目录后 `pg_ctl restart`，12 个扩展 `CREATE EXTENSION` 全过，`postgis_version()` 返回 `3.5`。筛库必须用 `ldconfig -p` 的 **soname 全集精确比对**；用"带空格的前缀匹配"会把无关库一起拷进来。
-2. **监听与认证**：自建实例监听 `0.0.0.0:17072`，`pg_hba` 至少放行 `127.0.0.1/32`、`172.16.0.0/12`、`<现场网段>` 三条 `scram-sha-256`。
-3. **`psql` 与 `initdb` 必须显式带 `-p 17072`**：不带端口会去连默认 `5432` 的本地 socket 直接失败，该报错容易被误读成"库没起来"。
-4. **编排侧走 remote 拓扑**：宿主自建库用 `--database-url postgresql://<用户>@<数据库服务器>:17072/<库名>` 传入，不要用 colocated 分支（那条分支依赖同名容器做地址重写与联网）。容器内探测宿主端口时用宿主内网地址或 `172.17.0.1`，**不要指望 `host.docker.internal`**（部分镜像里没有这个解析）。
+2. **监听与认证**：自建实例监听 `0.0.0.0:18084`，`pg_hba` 至少放行 `127.0.0.1/32`、`172.16.0.0/12`、`<现场网段>` 三条 `scram-sha-256`。
+3. **`psql` 与 `initdb` 必须显式带 `-p 18084`**：不带端口会去连默认 `5432` 的本地 socket 直接失败，该报错容易被误读成"库没起来"。
+4. **编排侧走 remote 拓扑**：宿主自建库用 `--database-url postgresql://<用户>@<数据库服务器>:18084/<库名>` 传入，不要用 colocated 分支（那条分支依赖同名容器做地址重写与联网）。容器内探测宿主端口时用宿主内网地址或 `172.17.0.1`，**不要指望 `host.docker.internal`**（部分镜像里没有这个解析）。
+5. **推荐用数据库离线包的 `database.env` 自动对接**：数据库包解包目录里的 `deploy.sh` 跑完会写出 `database.env`（含 `DATABASE_URL/DATABASE_HOST/DATABASE_PORT`），把它放到 GIS Agent 离线包解压目录（或其上一级），`deploy.sh` 会自动读取并复用，无需再传 `--database-url`。日志出现 `复用数据库离线包的连接串：<路径>` 即生效。
+6. **GIS Agent 离线包不再内置数据库**：包里只有 9 个应用镜像，数据库一律由数据库离线包（或客户原生 PostgreSQL）提供。包里没有数据库镜像，也就没有 `17072` 这个端口，别照旧文档套用。
+
 
 ## 四道现场闸门
 
@@ -108,6 +148,10 @@ firewall-cmd --reload
 | 2 授权 | 界面提示"系统未授权"，且**不拉起会话容器** | 新机必须先上传按机器指纹签发的 `license.lic`，这不是部署失败 |
 | 3 会话工作区 | 会话一启动就报无法写入工作目录 | 引擎 API 低于 `1.44` 会**静默丢弃** `volume-subpath`。`deploy.sh` 按语义实测选档，麒麟机应落在 `shim`（逐用户隔离保留），**不要求客户升 Docker** |
 | 4 "看起来绿了" | 复验通过但真实会话仍异常 | 三个陷阱：垫片不能只在有环境变量时生效、单文件 bind 挂载不热更新、判据必须打在 GISAgent 的真实调用链路上 |
+
+**两类授权都不要当成部署前置条件**：
+- **MapGIS SDK 授权**（`/opt/gisagent/site/mapgis/RegKey` 或 `*.reg`）：`deploy.sh` 现在**不再因此中断**，缺授权只打印 WARN 并继续，只有 MapGIS SDK 相关能力不可用；补齐后重跑 `./deploy.sh` 即启用。
+- **系统授权 `license.lic`**：部署完成后在管理页上传，未授权时首页提示且不拉起会话容器，**同样不是部署失败**（即闸门 2）。
 
 **部署顺序**：`deploy.sh` → 代理收尾（闸门 1 的 override 与变量透传）→ 上传授权 → 建会话验收。代理收尾必须在 `deploy.sh` 之后执行，重放不会破坏 `users/` 布局。
 
@@ -166,7 +210,7 @@ df -h /
 
 - 步骤 2 只有 Client 段没有 Server 段 → 机器上只有 `docker-cli`，守护进程没装或没起；`dnf` 拉不动源 → 按上方代理判据用 `curl` 验出网。
 - 步骤 4 md5 不一致 → 重传，**不要拆分或改名 bundle 内部目录**。
-- 步骤 5 连不上 → 先确认有没有带 `-p 17072`；扩展报错 → 按 `ldconfig -p` 全集精确补库。仅"其它机器直连宿主自建库"时才动防火墙。
+- 步骤 5 连不上 → 先确认有没有带 `-p 18084`；扩展报错 → 按 `ldconfig -p` 全集精确补库。仅"其它机器直连宿主自建库"时才动防火墙。
 - 步骤 6 数据库 TCP 预检失败 → 回步骤 5（监听地址、认证配置、防火墙三查）；日志读到的挂载模式既不是 `shim` 也不是 `native` → 现场显式开了降级开关，必须写进交付单。单机体也走 `remote`。
 - 步骤 7 返回 `000` → 容器仍没出网，先查 `NO_PROXY` 是否含现场网段与 `172.16.0.0/12`，再查会话容器的变量透传白名单是否漏了变量名。
 - 步骤 8 校验失败 → 先核对机器码与本机是否一一对应；**未授权时不会拉起会话容器**，这不是部署失败。授权指纹只取 `os / machine_id / cpu_id / system_uuid / volume_serial`，不含主机名，所以容器重建不会失效、无需重传。

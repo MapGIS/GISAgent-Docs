@@ -91,17 +91,6 @@
         ]
       },
       {
-        "tab": "遥感影像",
-        "groups": [
-          {
-            "group": "处理流程",
-            "pages": [
-              "docs/remote-sensing"
-            ]
-          }
-        ]
-      },
-      {
         "tab": "地名地址",
         "groups": [
           {

@@ -90,7 +90,7 @@ GIS Agent 包对模型能力的最低要求是不低于 `Qwen3.8-27B-FP8`。首�
 | :--- | :--- | :--- | :--- | :--- |
 | 用户 / 运维电脑 | GIS Agent 业务服务器 | `17076/TCP` | 需要 | 访问 Web、登录和授权管理 |
 | 用户 / 运维电脑 | 数据库服务器上的 SkillHub Web | `19081/TCP` | 按需 | 访问技能管理页面 |
-| GIS Agent 业务服务器 | 数据库服务器 | 数据库离线包通常为 `17072/TCP`；客户原生 PostgreSQL 按实际端口 | 需要 | `postgis_gateway` 和业务服务访问 PostgreSQL / PostGIS |
+| GIS Agent 业务服务器 | 数据库服务器 | 数据库离线包通常为 `18084/TCP`；客户原生 PostgreSQL 按实际端口 | 需要 | `postgis_gateway` 和业务服务访问 PostgreSQL / PostGIS |
 | GIS Agent 业务服务器 | 私网 Token 服务器 | 模型 API 端口，按 GPUStack 配置 | 私网模型需要 | 调用局域网大模型 |
 | GIS Agent 业务服务器 | 公网 Token / 模型 API | `443/TCP` | 公网模型需要 | 调用 `Qwen3.7-plus` |
 | 外部用户 | 数据库原生端口 / 模型 API | 任意 | 不需要 | PostgreSQL 和模型服务不直接对用户开放 |
@@ -116,7 +116,7 @@ GIS Agent 包对模型能力的最低要求是不低于 `Qwen3.8-27B-FP8`。首�
 - 用户只访问 GIS Agent 的 `17076`，不要让用户直接访问数据库和模型服务器。
 - 私网三台服务器之间必须有路由，防火墙按上表放行；GPUStack 管理端口只对运维网或 GIS Agent 开放。
 - 多机部署时 GIS Agent 通过数据库服务器的 IP/DNS 和 TCP 端口访问 PostgreSQL，不使用数据库容器名、跨主机 Docker network 或数据库服务器上的 `localhost`。
-- 数据库离线包的端口映射通常是 `17072:5432`，因此连接地址写成 `<数据库服务器IP或DNS>:17072`；客户提供原生 PostgreSQL 时填实际监听端口，不能机械套用 `17072`。
+- 数据库离线包的端口映射通常是 `18084:5432`，因此连接地址写成 `<数据库服务器IP或DNS>:18084`；客户提供原生 PostgreSQL 时填实际监听端口，不能机械套用 `18084`。
 
 ## 公网大模型和局域网大模型怎么选
 

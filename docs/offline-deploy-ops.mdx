@@ -46,13 +46,15 @@ GIS Agent 离线包交付业务容器、配置、技能包、知识库运行文�
 | 镜像与网络 | 加载 `images/docker-images.tar`；创建 `gisagent-network`、`gisagent-ai-network`；多机部署不创建也不依赖跨主机数据库网络 |
 | 启动与健康 | 停止旧 stack 并启动新 stack；按规则恢复 `volumes/` 归档；预创建缺失的固定命名 external volume；修复动态运行容器的 home 目录属主；等待 `postgis-gateway`、四个 Agent、`knowledge-mcp-http` 和 `mapgis-ai-gisagent` 健康，失败时打印对应容器最近日志并返回非零 |
 
+数据库地址有两种给法：显式 `--database-url`，或把数据库离线包 `deploy.sh` 生成的 `database.env` 放进 bundle 目录（或其上一级）自动复用 —— 后者是单机一体交付的推荐做法，日志会打印 `复用数据库离线包的连接串：<路径>`。注意 GIS Agent 包本身不含数据库镜像与服务，必须另有数据库离线包或客户自建 PostgreSQL。
+
 数据库 TCP 预检失败时不会继续重建业务栈，会提示数据库服务状态、监听地址和防火墙检查项。`--skip-up` 仅用于生成或更新配置时跳过该预检。
 
 常用参数共 5 个：
 
 ```bash
 ./deploy.sh --non-interactive
-./deploy.sh --database-url 'postgresql://<用户>@<数据库服务器>:17072/<库名>'
+./deploy.sh --database-url 'postgresql://<用户>@<数据库服务器>:18084/<库名>'
 ./deploy.sh --skip-images
 ./deploy.sh --skip-volumes
 ./deploy.sh --skip-up
@@ -101,6 +103,9 @@ curl -fsS http://127.0.0.1:18081/healthz
 局域网模型的完整链路是：GPUStack server → worker `READY` → 推理后端 → 模型 `RUNNING` → `/v1/models` → `/v1/chat/completions` → 业务侧模型接入 → 会话非空回复。缺任何一环都算未通。
 
 ### 授权验证
+
+> 先区分两类授权：**MapGIS SDK 授权**（站点目录 `RegKey` / `*.reg`）缺失时 `deploy.sh` 只告警、不中断部署，补齐后重跑即启用；**系统授权 `license.lic`** 在部署之后从管理页上传，未授权只影响会话拉起。两者都不是部署失败。
+
 
 首次登录后如果系统未授权，首页会提示"系统未授权，请在后台授权管理页面上传 license.lic"。**这不是部署失败**，而是需要补充服务器授权。按顺序执行：
 
@@ -207,7 +212,7 @@ GPUStack 侧需要额外确认：server 可运行在无 GPU 的 CPU 节点，wor
 | pgAdmin 入口端口 | `5050` |
 | bundle 默认瓦片服务端口 | `3333` |
 | 默认数据库拓扑 | `remote`（传统多机部署） |
-| 数据库离线包默认入口 | `<数据库服务器IP或DNS>:17072` |
+| 数据库离线包默认入口 | `<数据库服务器IP或DNS>:18084` |
 | 默认数据库入口 | 由 `deploy.sh` 交互询问并执行 TCP 预检 |
 | 默认网关入口 | 由 `deploy.sh` 交互询问 |
 | `workspace-data` | 默认保留 |
@@ -223,8 +228,8 @@ GPUStack 侧需要额外确认：server 可运行在无 GPU 的 CPU 节点，wor
 | 模型服务 | `/healthz` 成功但 `/v1/models` 为空或 `401` | server 健康不等于 worker 和模型可用；确认 worker `READY`、模型 `RUNNING`、鉴权有效 |
 | 模型接入 | `/v1/chat/completions` 成功，但业务侧没有可选模型 | 模型 ID 要用 `provider-id/model-id` 形式；确认容器内 Base URL 不是 `127.0.0.1` |
 | 协议不匹配 | 把 GPUStack 地址直接填到 `agent-claude` 后失败 | GPUStack 默认提供 OpenAI Chat Completions，Claude 需要 Anthropic Messages 兼容接口 |
-| 数据库连通 | `deploy.sh` 在数据库预检阶段失败 | 先 `nc -vz <数据库服务器IP或DNS> 17072`；再确认数据库已启动、监听非 `127.0.0.1`、入站防火墙放行、出站策略允许 |
-| 跨主机误配 | 多机部署误填容器名，或提示 `xcsmartdatabase-network` 不存在 | 改为 `IP或DNS:17072`；容器名只在同一 Docker daemon 且显式启用同机模式时才有意义 |
+| 数据库连通 | `deploy.sh` 在数据库预检阶段失败 | 先 `nc -vz <数据库服务器IP或DNS> 18084`；再确认数据库已启动、监听非 `127.0.0.1`、入站防火墙放行、出站策略允许 |
+| 跨主机误配 | 多机部署误填容器名，或提示 `xcsmartdatabase-network` 不存在 | 改为 `IP或DNS:18084`；容器名只在同一 Docker daemon 且显式启用同机模式时才有意义 |
 | 会话与沙箱 | 部署全绿、容器都 healthy，但会话一启动就报写不出工作目录 | 见[x86 + 银河麒麟 V11](/docs/offline-deploy-kylin)闸门 3；龙芯见[龙芯 + 统信 UOS](/docs/offline-deploy-loongarch)；与是否用 root 账号部署无关 |
 | 容器出网 | 能登录、容器健康，但一句话都回不出来 | 宿主 shell 的代理不会自动进容器，见闸门 1 |
 | 授权 | 界面提示「系统未授权」，且不拉起会话容器 | 新机未上传授权，不是部署失败 |
