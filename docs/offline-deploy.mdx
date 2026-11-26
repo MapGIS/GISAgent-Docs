@@ -4,289 +4,232 @@ title: 离线部署
 
 # 离线部署
 
-> 一句话结论：`mapviz-skills` 的 49 个技能中，42 个在离线环境下的某个环节会断，只有 7 个可以完全离线出图。
-> 断点不在“算法”，而在四类外部资源：前端库、底图瓦片、注记字体、要素数据接口。
-> 全量口径：把范围扩到整个 `skillpacks` 的 67 个技能后，需处置 54 个、只需内网容器在位 3 个、完全无外部依赖 10 个。
+> 一句话结论：以仓库 `skills/` 为分母共 **70** 个技能（63 个顶层 + 7 个 ui-ux 嵌套）。**48** 个在离线时仍会在底图或数据上断开，**22** 个无公网运行依赖。
+> 断点已经不在前端库和注记字体：L1 / L3 残留已切到 `/lib/maplibre`、`/lib/cesium`、`/lib/fonts`。真正要准备的是 **天地图底图** 和 **可预抓的专题数据**。
+> 数字来自 2026-11-25 对 `skills/` 的重扫，并计入 2026-11-26 的残留修复与专题预抓落地。逐技能矩阵见 OpenSpec change `offline-skill-network-deps-refresh`。
+> 专题数据（不含瓦片）已落到打包机 `/data/dataset/gisagent`（936 文件 / 133.1 MiB / 32 技能目录），**尚未打进交付 tar**。天地图 / Terrarium / GIBS / Overture / 路由按策略不爬。
 
-离线部署时最容易踩的坑是：只盯着“数据取不到”，却发现页面连地图都渲染不出来。原因是这两个问题分属不同环节——页面能不能起来取决于前端库，地图有没有背景取决于底图瓦片，标注有没有文字取决于字体服务，图上有没有内容才取决于数据接口。本章按这四个环节统计受影响技能，并给出每一类的处置方向。
-
-打个比方：一张在线地图页面像一家外卖店。**前端库**是店面的水电，水电不通店门都开不了；**底图瓦片**是店里的背景布景，没有它前台空荡但还能营业；**注记字体**是菜单上的字，字没了顾客看不懂菜名；**数据接口**才是食材，食材断了做菜这一步才真正停摆。离线部署要依次把水电、布景、字体、食材都换成本地供给，缺一样就缺一段效果。
+离线部署时最容易踩的坑是：只盯着“数据取不到”，却发现页面连地图都渲染不出来。原因分属不同环节——页面能不能起来取决于前端库，地图有没有背景取决于底图瓦片，标注有没有文字取决于字体服务，图上有没有内容才取决于数据接口。本章按这四个环节统计，并单独列出哪些数据可以提前爬取。
 
 ## 本章在离线交付中的位置
 
-离线交付要同时回答"机器和网络怎么准备"和"技能会断在哪一环"。本章只回答后者，前者已按《GIS Agent 离线部署用户手册》拆成三页：
+离线交付要同时回答“机器和网络怎么准备”和“技能会断在哪一环”。本章只回答后者：
 
-- [部署方案与前提](/docs/offline-deploy-plan)：三机职责与推荐配置、端口与访问关系、公网与局域网模型选型、客户准备清单、部署前确认清单。
-- [x86 + 银河麒麟 V11](/docs/offline-deploy-kylin)：x86_64 + 麒麟 V11 实测基线、源内缺项、容器发布端口与宿主自建端口的差异、四道现场闸门、从裸机到能对话的现场流程。
-- [龙芯 + 统信 UOS](/docs/offline-deploy-loongarch)：LoongArch64 第二基线、MapGIS 边界、B1 混合拓扑、LoongArch 镜像打包与 52 例 E2E 结果。
-- [实施与运维要点](/docs/offline-deploy-ops)：三个离线包关系、部署脚本职责、数据卷规则、部署后验收判据、联网能力矩阵、私网模型运行期判据、默认值速查与常见问题定位。
+- [部署方案与前提](/docs/offline-deploy-plan)：三机职责、端口、公网与局域网模型、客户准备清单。
+- [x86 + 银河麒麟 V11](/docs/offline-deploy-kylin)：麒麟基线与现场闸门。
+- [龙芯 + 统信 UOS](/docs/offline-deploy-loongarch)：龙芯基线、MapGIS 边界、B1 混合拓扑。
+- [实施与运维要点](/docs/offline-deploy-ops)：三个离线包、验收判据、模型调用面联网矩阵。
 
-三页与本章同以 V3.25 手册为事实源。本章的 L1–L6 是**制图产出面**的断点，手册的联网能力矩阵是**模型调用面**的可用性，两个口径不同、结论互补，离线验收时都要过。
+本章的 L1–L6 是**制图产出面**的断点，手册的联网能力矩阵是**模型调用面**的可用性。两个口径不同，离线验收都要过。
 
 ## 判定口径
 
-为了避免把“文档里提到过的网址”误判成“运行时要请求的网址”，本章统计遵循以下口径：
-
 | 项目 | 口径 |
 | :--- | :--- |
-| 统计范围 | `skillpacks/mapviz-skills` 下 49 个技能目录 |
-| 计入“运行依赖”的文件 | 页面模板（`.html`）、脚本（`.js` `.mjs` `.py` `.sh`）、样式（`.css`）、以及配置与数据清单（`.json` `.yaml`，如数据源台账、样式文件、数据源目录树） |
-| 不计入运行依赖 | 技能说明（`.md`）里列举的备用来源、参考出处、许可证头、XML 命名空间地址（如 `www.w3.org`）、申请 key 的控制台页面链接 |
-| 产品自有服务 | `postgis-gateway` 容器、本地瓦片服务、技能自带的 `assets/` 数据，均计为本地资源 |
-| 分级 | 同一技能可同时命中多级，取全部命中项 |
+| 统计范围 | `/home/maptex/Code/xcsmartdatabase/skills`：顶层含 `SKILL.md` 的 63 个目录，加上 `ui-ux-pro-max-skill/.claude/skills` 下 7 个嵌套技能，共 **70** |
+| 计入运行依赖 | 页面模板、渲染脚本、样式、数据清单 |
+| 不计入 | `SKILL.md` 备用来源、许可证头、XML 命名空间、`node_modules`、申请 key 的控制台链接 |
+| 产品自有服务 | `postgis-gateway`、本地 `/lib/*`、技能 `assets/` 均算本地 |
+| 分级 | 同一技能可命中多级 |
 
-其中“只出现在说明里的在线来源”单列在文末「边界与例外」，共 10 个技能。这类技能运行时不访问外网，但一旦用户要求“刷新成最新数据”，仍会失败。
-
-L1–L6 的分母固定为 `mapviz-skills` 的 49 个制图技能；文末「技能面全景」把范围扩到整个 `skillpacks` 的 67 个技能，并追加了工具与规范面专用的口径，两套数字分开标注、不做混合。
+不再使用旧文的 `skillpacks/mapviz-skills` 49 / 全量 67 口径。`sld-admin-boundary`、`sld-dem-terrain`、`sld-poi-icons`、`sld-statistical-thematic` 已不在 `skills/`。
 
 ## 影响分级总览
 
-| 等级 | 断点位置 | 受影响技能数 | 离线时的表现 |
+| 等级 | 断点位置 | 技能数 | 离线时的表现 |
 | :--- | :--- | :--- | :--- |
-| L1 | 前端库取自公共 CDN | 6 | 整页无法初始化，页面空白 |
-| L2 | 底图瓦片来自在线地图服务 | 34 | 数据图层可出，底图空白或灰色网格 |
-| L3 | 注记字体（glyphs）来自公共字体服务 | 15 | 文字标注不渲染或样式加载报错 |
-| L4 | 要素数据来自在线 API | 30 | 无数据可绘，产出空图或直接失败 |
-| L5 | 产品自有服务写死了公网地址 | 2 | 指向外部网关，内网无法访问 |
-| L6 | 全部为本地资源或本地服务 | 7 | 不受影响 |
+| L1 | 前端库取自公共 CDN | **0** | 2026-11-26 已把 `sld-realtime-alert` 的 unpkg 和 design-system 的 Google Fonts 改掉 |
+| L2 | 底图瓦片来自在线地图服务 | **44** | 数据图层可出，底图空白或灰色网格 |
+| L3 | 注记字体来自公共字体服务 | **0** | 其余页面已用 `/lib/fonts` 或 gateway `/font` |
+| L4 | 要素数据来自在线 API | **38** | 无数据可绘，或只能使用过期快照 |
+| L5 | 自有服务写死开发机 IP | **0** | `sld-natural-resources` 已改为 `postgis-gateway:3000` |
+| L6 | 全部为本地资源或本地服务 | **22** | 不受公网影响 |
 
-关键数字（均由扫描脚本对账得出，见文末「复核方式」）：
+关键数字：
 
-- 技能总数 **49**，受影响 **42**，不受影响 **7**。
-- 至少命中三个断点层级的技能 **11** 个，即“底图、字体、数据同时依赖外网”的重灾区。
-- 逐技能去重后累加的在线端点引用 **171** 处，全局唯一域名 **105** 个。
-- 底图与数据接口同时需要外网的技能 **27** 个（L2 ∩ L4）。
+- 技能总数 **70**，受影响 **48**，不受影响 **22**。48 + 22 = 70。
+- 约 **40** 个出图技能共用天地图 WMTS，不要按技能各爬一遍。
+- 18 个专题数据可以预抓，建议合成 6 份数据包。其中行政区、电厂、机场/地铁、全球专题、三城 Overpass、星历/GBIF/STAC 目录已在 `/data/dataset/gisagent`；Overture 演示包未做。
+- 13 个本质实时，只能交截止时刻快照（目录里已有 USGS / EONET / OpenSky / SWPC / 台风等）。
 
-## L1 前端库走公共 CDN（6 个）
+## L1 / L3：前端库和字体（已基本本地化）
 
-命中技能：`sld-admin-boundary`、`sld-dem-terrain`、`sld-poi-icons`、`sld-realtime-alert`、`sld-statistical-thematic`、`sld-utility-pipeline`。
+当前出图页默认引用：
 
-这是最容易被低估的一类。这 6 个技能的样式、数据和瓦片来源本身都不依赖外网（其中 `sld-admin-boundary`、`sld-dem-terrain` 还支持把瓦片地址注入本地瓦片服务），唯独“让页面跑起来的库”还挂在公共 CDN 上。离线打开时控制台先报脚本加载失败，整页白板，容易被误判成“技能坏了”。
+- MapLibre：`/lib/maplibre/5.24.0/`
+- Cesium：`/lib/cesium/1.122/`
+- 注记字体：`/lib/fonts/{fontstack}/{range}.pbf` 或 `postgis-gateway` 的 `/font`
 
-其余 38 个技能已改为引用产品内置的本地前端库路径（`/lib/maplibre/4.7.1/`），不依赖 CDN。三维相关页面所需的 Cesium 库同样已内置为本地路径（`/lib/cesium/1.122/`）。
+`spatial-analysis` 的清单里仍记录 Turf 的公共下载地址，运行用的是包内文件，不算 L1。
 
-处置方向：把这 6 个技能预览页的前端库引用改为产品内置本地路径即可，无需改动样式与数据链路。改造前可通过“打开页面是否发起 unpkg 请求”来确认命中。
+2026-11-26 修掉的残留：
 
-需要注意 `spatial-analysis`：它的清单文件里记录了内置分析库的公共下载来源，但实际计算用的是技能自带的本地文件，属于“出处记录”，不计入 L1。
-
-另外，MapLibre 与 Cesium 的前端库都已随产品发布到本地目录（分别为版本 4.7.1 与 1.122），因此 L1 的改造只是把页面引用从 CDN 换回已有的本地路径，不需要额外引入依赖。
-
-## L2 底图瓦片需要外网（34 个）
-
-命中技能：`3d-building-map`、`3d-terrain-map`、`biodiversity-map`、`change-detection-map`、`china-airport-map`、`china-historical-map`、`china-metro-map`、`city-isochrone-map`、`classic-hiking-route-map`、`cobalt-mine-map`、`coral-reef-map`、`earthquake-realtime-map`、`eonet-event-map`、`fishing-zone-map`、`flight-tracker-map`、`ndvi-vegetation-map`、`nightlight-map`、`nowcasting-map`、`ocean-current-map`、`openmeteo-contour-forecast-map`、`personal-footprint-map`、`poi-heatmap-map`、`postgis-poi-address`、`protected-area-map`、`route-navigation`、`sea-level-rise-map`、`self-driving-escape-map`、`shipping-ais-map`、`stac-browser-map`、`statistical-thematic-map`、`storymap-template`、`tide-gauge-map`、`typhoon-track-map`、`weather-visualization-map`。
-
-离线表现是“图层逻辑正常、背景全空”：叠加的矢量或栅格数据按坐标画出来了，但底下没有地图可参照。
-
-这一类的构成并不是单一的：
-
-| 子类 | 规模 | 说明 |
+| 技能 | 原断点 | 现状态 |
 | :--- | :--- | :--- |
-| 天地图在线底图 | 34 个技能中的绝大多数 | 以 WMTS 或切片接口取底图，且必须带开放平台密钥 |
-| 其他在线影像或地形源 | 7 个 | 公共 OSM 瓦片、ArcGIS 在线影像与地形、NASA 对地观测影像、公共高程切片、历史影像服务 |
-| 仅说明提及、运行态不访问 | 另计 2 个 | 见「边界与例外」 |
+| `sld-realtime-alert` | unpkg MapLibre + `demotiles.maplibre.org` glyphs | 改为 `/lib/maplibre/5.24.0` 与 `/lib/fonts`；地震数据仍是 USGS 快照 |
+| `ui-ux-pro-max-skill/design-system` | Google Fonts | 幻灯片模板改为系统/token 字体栈 |
+| `sld-natural-resources` | `http://192.168.11.24:3000` | 改为 `http://postgis-gateway:3000`。intl 样例仍带 OSM raster，算 L2 |
 
-处置方向分三步：
+## L2 底图瓦片需要外网（44 个）
 
-1. **密钥问题先与网络问题分开确认**。有外网但密钥失效，现象是瓦片请求返回鉴权错误；完全没有外网，现象是请求根本不通。
-2. **底图来源切到本地**。产品自带 `postgis-gateway` 容器（默认对外端口 3000）与本地瓦片服务；已有 2 个技能通过命令行参数把瓦片地址注入样式，可复用这一模式为本地底图供片。
-3. **确无本地底图时退化为“无底图专题图”**。多数技能在纯数据图层下仍可读，此时应显式去掉底图图层，避免残留在线瓦片请求导致长时间转圈。
+命中技能：`3d-building-map`、`3d-terrain-map`、`arnis-earth`、`atlas-earth`、`biodiversity-map`、`change-detection-map`、`china-airport-map`、`china-historical-map`、`china-metro-map`、`chinese-painting-map`、`city-isochrone-map`、`classic-hiking-route-map`、`cobalt-mine-map`、`coral-reef-map`、`earthquake-realtime-map`、`energy-facility-map`、`eonet-event-map`、`fishing-zone-map`、`flight-tracker-map`、`gaussian-earth`、`ndvi-vegetation-map`、`nightlight-map`、`nowcasting-map`、`ocean-current-map`、`openmeteo-contour-forecast-map`、`osint-command-dashboard`、`personal-footprint-map`、`poi-heatmap-map`、`postgis-poi-address`（预览页）、`protected-area-map`、`route-navigation`、`satellite-tracker-map`、`sea-level-rise-map`、`self-driving-escape-map`、`shipping-ais-map`、`sld-natural-resources`（intl 样例 OSM）、`space-weather-aurora-map`、`stac-browser-map`、`statistical-thematic-map`、`storymap-template`、`submarine-cable-map`、`tide-gauge-map`、`typhoon-track-map`、`weather-visualization-map`。
 
-## L3 注记字体需要外网（15 个）
+离线表现是“图层逻辑正常、背景全空”。
 
-命中技能：`china-metro-map`、`city-isochrone-map`、`classic-hiking-route-map`、`flight-tracker-map`、`openmeteo-contour-forecast-map`、`poi-heatmap-map`、`self-driving-escape-map`、`shipping-ais-map`、`storymap-template`、`sld-admin-boundary`、`sld-dem-terrain`、`sld-poi-icons`、`sld-realtime-alert`、`sld-statistical-thematic`、`sld-utility-pipeline`。
+| 子类 | 说明 |
+| :--- | :--- |
+| 天地图 WMTS | 绝大多数。`vec_w` / `cva_w` / `img_w` / `cia_w` / `ter_w`，必须带开放平台密钥 |
+| AWS Terrarium DEM | `3d-terrain-map`、`chinese-painting-map` |
+| NASA GIBS | NDVI、夜光、变化检测、OSINT 云图 |
+| Overture 远程 PMTiles | `atlas-earth` / `arnis-earth` / `gaussian-earth` 的探索模式；给 bbox 时可先 `fetch-tiles` |
+| 复旦「时空中国」 | `china-historical-map` |
+| RainViewer / OSM / Esri | 临近雷达、变化检测备用源、自然资源 intl 样例 |
 
-这 15 个技能的样式把注记字体地址写成公共字体服务。离线下底图或数据即使补齐，标注文字仍出不来；部分场景还会因为字体请求失败而中断样式初始化，表现为“地图整层不渲染”，比单纯的“没有注记”更严重。
+处置：
 
-处置方向：把注记字体地址切到产品网关的字体接口。`china-metro-map` 已支持用命令行参数直接指定字体地址，属于可以直接落地的样板；其余技能按同一方式改造。需要中文标注时，字体必须由本地服务提供，不能退回浏览器本地字体，否则跨端字形不一致。
+1. **密钥与网络分开确认**。有外网但 key 失效，是鉴权错误；没外网，是请求根本不通。
+2. **按交付 bbox 爬一份天地图**，接到本地瓦片服务或 gateway。技能已有 `--tk`、`--gateway`、`--tileserv`。
+3. **确无本地底图时改成无底图专题图**，不要留着在线瓦片地址转圈。
 
-## L4 要素数据来自在线接口（30 个）
+`maplibre-common` / `cesium-common` 自身是 L6，但 `references/tianditu.md` 的示例仍是公网天地图，会带偏新页面。这两份说明已加上离线改走本地瓦片的约束。
 
-命中技能：`3d-building-map`、`biodiversity-map`、`china-airport-map`、`china-historical-map`、`china-metro-map`、`city-isochrone-map`、`classic-hiking-route-map`、`cobalt-mine-map`、`earthquake-realtime-map`、`eonet-event-map`、`fishing-zone-map`、`flight-tracker-map`、`nowcasting-map`、`ocean-current-map`、`openmeteo-contour-forecast-map`、`personal-footprint-map`、`poi-heatmap-map`、`protected-area-map`、`route-navigation`、`sea-level-rise-map`、`self-driving-escape-map`、`sld-realtime-alert`、`stac-browser-map`、`statistical-thematic-map`、`storymap-template`、`tianditu-geocoder`、`tide-gauge-map`、`tourist-attraction-map`、`typhoon-track-map`、`weather-visualization-map`。
+## L4 要素数据来自在线接口（38 个）
 
-这一类内部差异最大，按离线可行性分成四组：
+内部按离线可行性分成四档，详见下一节「可预先爬取」。代表来源：
 
-| 分组 | 代表来源 | 离线可行性 |
+- Overpass：建筑、机场、POI、保护区、矿区、徒步点
+- 阿里云 DataV：行政区，足迹图 / 专题图 / 景点图 / 自驾逃离共用
+- 高德地铁 JSON：`china-metro-map`
+- GBIF、WRI 电厂、TeleGeography 海缆、CelesTrak 星历
+- 实时：USGS 地震、EONET、OpenSky、Open-Meteo、RainViewer、NOAA 潮位/极光、浙江水利厅台风与雷达
+- 地理编码：`tianditu-geocoder`（离线应改走 `postgis-poi-address`）
+- 路由：OSRM / Valhalla（应自建，不是爬）
+
+`coral-reef-map`、`fishing-zone-map`、`shipping-ais-map` 的专题数据已随包，但底图仍走天地图，所以在 L2 而不在 L4。
+
+`energy-facility-map` 已改为优先读技能内 `assets/global_power_plant_database.csv`；文件不在时才访问 GitHub / jsdelivr。
+
+## L6 不受公网影响（22 个）
+
+规范 / 编排：`agent-orchestration-improve-agent`、`cesium-common`、`evolution`、`maplibre-common`、`self-improving-agent`、`spatial-analysis`。
+
+内网 gateway / PostGIS 在位即可：`map-poster-maker`、`mapgis-land-change-batch`、`mapgis10-java-skills`、`postgis-3dtiles`、`stylized-3d-city-map`、`sld-municipal-facilities`、`sld-public-security`、`sld-utility-pipeline`、`tianditu-1m-atlas`。
+
+ui-ux（7 个嵌套技能现全部无 Google Fonts 运行依赖）：`banner-design`、`brand`、`design`、`design-system`、`slides`、`ui-styling`、`ui-ux-pro-max`。
+
+## 可预先爬取
+
+不要按 70 个技能各爬一遍。瓦片和要素分开记账：一个技能可以「数据已随包、底图仍要爬天地图」。
+
+### 2026-11-26 预抓落地（打包机）
+
+落点：`/data/dataset/gisagent/<技能名>/`。索引：同目录 `README.md`、`MANIFEST.json`。合计 **936** 个数据文件（不含预览 html），**133.1 MiB**，**32** 个技能目录。
+
+| 档 | 状态 |
+| :--- | :--- |
+| 全国行政区 | 已拷入足迹图 / 专题图 / 景点图 / 自驾逃离 / 旅游热力图 |
+| WRI 电厂 | `energy-facility-map/global_power_plant_database.csv`，11.4 MiB |
+| 中国机场 + 地铁 | OSM 机场 311；高德地铁 JSON 按城，82 文件 |
+| 全球专题 | FAO 渔区 36 MiB、海缆 717 文件、珊瑚目录、钴矿内置矿区 |
+| 演示城市 Overpass | 北京建筑约 2.3 万面；京/沪/汉 POI 与保护区；黄山/西湖徒步 OSM。**Overture PMTiles 未抓** |
+| 可选低频 | CelesTrak 分组星历（含 starlink 11195 颗）；GBIF 默认种；复旦目录（无瓦片）；STAC collections 138 条 |
+| 实时快照 | USGS 多 feed、EONET、OpenSky 中国 bbox、SWPC、台风 2024–2026、潮位站、RainViewer **仅索引** |
+| 旅游热力图样例 | 11 个假期 `cities.json`，只收全市接待，共 169 条；2025 国庆已用 `tourism-render.mjs` 出图 |
+
+未抓（按交付策略，不是失败）：天地图 / Terrarium / GIBS 瓦片、Atlas / Arnis / 高斯 Overture、OSRM/Valhalla 路由。
+
+仍取不到：CelesTrak `active` 官方 2 小时 403；钴矿 OSM 面脚本空转已停，保留技能自带 `mine-areas.geojson`；文旅局/交易所网页无稳定接口。
+
+### 已随包（6）
+
+`coral-reef-map`、`fishing-zone-map`、`shipping-ais-map`（样本 AIS）、`tourism-heatmap` 的省/市边界与常住人口、`chinese-painting-map` 画卷素材、`spatial-analysis` 的 Turf。
+
+### 值得打成数据包（18 个技能，合成 6 份）
+
+| 包 | 覆盖技能 | 源 |
 | :--- | :--- | :--- |
-| 可自建替代 | 路网路由引擎、地址编码与要素查询、开源地图要素导出、行政区边界服务 | **高**。可用本地路由服务、产品网关、本地边界数据替代，且多数技能已提供数据源地址参数 |
-| 可预先抓取 | 静态或低频更新的专题数据（历史底图、保护区、行业台账、生物多样性名录等） | **中**。在能联网的环境一次性抓取后随包发布，页面改为读本地副本 |
-| 本质依赖实时源 | 地震速报、台风路径、临近降水、潮汐、航空器实时位置、海洋气象、自然灾害事件 | **低**。离线只能出“截至抓取时刻”的结果，无法承诺实时性 |
-| 依赖公开网页取数 | 企业公告、交易所披露、各国地质与矿产目录、统计数据门户 | **低**。这类来源没有稳定接口，离线时建议直接改为交付内置数据版本 |
+| 全国行政区 | `personal-footprint-map`、`statistical-thematic-map`、`tourist-attraction-map`、`self-driving-escape-map` | 阿里云 DataV `areas_v3` |
+| WRI 电厂 | `energy-facility-map`、`osint-command-dashboard` 核电层 | Global Power Plant Database CSV |
+| 中国机场 + 地铁 | `china-airport-map`、`china-metro-map` | Overpass aerodrome、CAAC 统计、高德地铁 JSON |
+| 全球专题 | `submarine-cable-map`、`fishing-zone-map`、`coral-reef-map`、`cobalt-mine-map` 矿区范围 | TeleGeography、FAO、礁盘、约 60 处 OSM 矿区 |
+| 演示城市 | `atlas-earth`、`arnis-earth`、`gaussian-earth`、`3d-building-map`、`poi-heatmap-map`、`protected-area-map` | Overture PMTiles（技能已有 `fetch-tiles.mjs`）+ Overpass |
+| 可选低频 | `satellite-tracker-map`、`biodiversity-map`、`china-historical-map` 目录 | CelesTrak（1–3 天过期）、GBIF、复旦目录 |
 
-按端点数看，`cobalt-mine-map`（40 个）和 `china-historical-map`（15 个）远超其余技能：前者汇总了全球矿产项目、交易所披露与多国地质目录，后者汇总了各级在线历史底图与标准地图服务。这两个技能在离线环境不建议按原样交付，应改为“内置数据 + 本地底图”的精简版本。
+### 按交付范围爬瓦片（44 个技能共用）
 
-## L5 自有服务写死公网地址（2 个）
+先定 bbox 和 zoom，一次爬：
 
-命中技能：`china-historical-map`、`sld-admin-boundary`。
+| 图层 | 用途 | 密钥 |
+| :--- | :--- | :--- |
+| 天地图 `vec_w` + `cva_w` | 默认矢量底图和注记 | 客户 tk，与网络通断分开确认 |
+| 天地图 `img_w` + `cia_w` | 影像 | 同上 |
+| 天地图 `ter_w` | 地形晕渲 | 同上 |
+| AWS Terrarium | 真三维地形、国画卷 DEM | 无 key |
+| NASA GIBS | NDVI / 夜光 / 变化检测 | 无 key，要定日期 |
+| 复旦历史地图 | `china-historical-map` | 按选中图幅，不要全目录 |
 
-这两个技能引用的并不是第三方公共服务，而是产品自己的网关与瓦片服务，但地址固化成了公网 IP 或公网域名。离线部署时它们会指向外部，内网访问不通，现象与 L2 类似但根因完全不同。
+现成抓手：`openspec/changes/tile-crawling-standalone`（MBTiles）。爬完接 `--tileserv` / `--gateway`，不要改死地址。
 
-处置方向：部署时改为内网可达地址，或使用相对路径形式由当前站点同源提供。这类改造属于配置替换，不涉及逻辑变更。
+### 宜自建、爬了也替代不了（5）
 
-## L6 不受影响（7 个）
+| 技能 | 公网服务 | 离线替代 |
+| :--- | :--- | :--- |
+| `route-navigation` | `routing.openstreetmap.de` | 内网 OSRM |
+| `city-isochrone-map` | `valhalla1.openstreetmap.de` | 内网 Valhalla |
+| `self-driving-escape-map` | `router.project-osrm.org` | 内网 OSRM |
+| `classic-hiking-route-map` | BRouter / Valhalla | 同上 |
+| `tianditu-geocoder` | 天地图 geocoder | `postgis-poi-address` |
 
-`cesium-common`、`map-poster-maker`、`maplibre-common`、`self-improving-agent`、`spatial-analysis`、`tianditu-1m-atlas`（原名 `sld-tianditu-gb100`）、`tourism-heatmap`。
+现场还要「任意新范围现拉 OSM」，应自建 Overpass，或只提供预抓 bbox。
 
-其中三个属于规范或工具类技能（前端使用约束、三维使用约束、空间分析算子），本身不出图；`spatial-analysis` 的分析库已内置为本地文件；`tourism-heatmap` 直接使用自带的地理数据与内置基准值；`sld-tianditu-gb100` 走本地网关；`map-poster-maker` 通过参数指定本地网关与样式。
+### 只能快照（13）
 
-需要注意的是，两个规范类技能（`maplibre-common`、`cesium-common`）的说明文档里以天地图在线底图作为默认示例。它们自身不受影响，但会**引导新生成的页面去引用在线底图**——离线环境里这一点必须同步调整，否则新做的页面会继续复现 L2 问题。
+`earthquake-realtime-map`、`eonet-event-map`、`flight-tracker-map`、`nowcasting-map`、`ocean-current-map`、`openmeteo-contour-forecast-map`、`tide-gauge-map`、`typhoon-track-map`、`weather-visualization-map`、`space-weather-aurora-map`、`sld-realtime-alert`、`submarine-cable-map` 的 IODA 中断、`osint-command-dashboard` 的实时层。
 
-## 逐技能矩阵
+交付说明必须写数据截止时刻。`stac-browser-map` 可缓存一份目录，不能预抓全球影像。
 
-按影响等级排序，同级内按技能名排序。数字口径见「判定口径」。
+### 不要做通用爬虫（2）
 
-| 技能 | 前端库 | 底图 | 注记字体 | 在线数据端点 | 影响等级 | 可覆盖参数 |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `sld-dem-terrain` | **公共 CDN** | 本地/无需 | **在线** | 0 | L1/L3 | `--tileserv` |
-| `sld-poi-icons` | **公共 CDN** | 本地/无需 | **在线** | 0 | L1/L3 | — |
-| `sld-statistical-thematic` | **公共 CDN** | 本地/无需 | **在线** | 0 | L1/L3 | — |
-| `sld-utility-pipeline` | **公共 CDN** | 本地/无需 | **在线** | 0 | L1/L3 | — |
-| `sld-realtime-alert` | **公共 CDN** | 本地/无需 | **在线** | 1 | L1/L3/L4 | — |
-| `sld-admin-boundary` | **公共 CDN** | 本地/无需 | **在线** | 0 | L1/L3/L5 | `--tileserv` |
-| `3d-terrain-map` | 本地内置 | **在线** | 无需 | 0 | L2 | `--tk` |
-| `change-detection-map` | 本地内置 | **在线** | 无需 | 0 | L2 | `--tk` |
-| `coral-reef-map` | 本地内置 | **在线** | 无需 | 0 | L2 | `--tk` |
-| `ndvi-vegetation-map` | 本地内置 | **在线** | 无需 | 0 | L2 | `--tk` |
-| `nightlight-map` | 本地内置 | **在线** | 无需 | 0 | L2 | `--tk` |
-| `postgis-poi-address` | 本地内置 | **在线** | 无需 | 0 | L2 | — |
-| `shipping-ais-map` | 本地内置 | **在线** | **在线** | 0 | L2/L3 | `--tk` |
-| `china-metro-map` | 本地内置 | **在线** | **在线** | 1 | L2/L3/L4 | `--glyphs` `--tk` |
-| `city-isochrone-map` | 本地内置 | **在线** | **在线** | 2 | L2/L3/L4 | `--router` `--tk` |
-| `classic-hiking-route-map` | 本地内置 | **在线** | **在线** | 2 | L2/L3/L4 | `--router` `--tk` |
-| `flight-tracker-map` | 本地内置 | **在线** | **在线** | 1 | L2/L3/L4 | `--endpoint` `--tk` |
-| `openmeteo-contour-forecast-map` | 本地内置 | **在线** | **在线** | 2 | L2/L3/L4 | `--tk` |
-| `poi-heatmap-map` | 本地内置 | **在线** | **在线** | 1 | L2/L3/L4 | `--tk` |
-| `self-driving-escape-map` | 本地内置 | **在线** | **在线** | 2 | L2/L3/L4 | `--router` `--tk` |
-| `storymap-template` | 本地内置 | **在线** | **在线** | 4 | L2/L3/L4 | `--tk` |
-| `3d-building-map` | 本地内置 | **在线** | 无需 | 2 | L2/L4 | `--tk` |
-| `biodiversity-map` | 本地内置 | **在线** | 无需 | 1 | L2/L4 | `--tk` |
-| `china-airport-map` | 本地内置 | **在线** | 无需 | 2 | L2/L4 | `--tk` |
-| `cobalt-mine-map` | 本地内置 | **在线** | 无需 | 40 | L2/L4 | `--endpoint` `--tk` |
-| `earthquake-realtime-map` | 本地内置 | **在线** | 无需 | 1 | L2/L4 | `--tk` |
-| `eonet-event-map` | 本地内置 | **在线** | 无需 | 1 | L2/L4 | `--tk` |
-| `fishing-zone-map` | 本地内置 | **在线** | 无需 | 1 | L2/L4 | `--tk` |
-| `nowcasting-map` | 本地内置 | **在线** | 无需 | 2 | L2/L4 | `--tk` |
-| `ocean-current-map` | 本地内置 | **在线** | 无需 | 1 | L2/L4 | `--tk` |
-| `personal-footprint-map` | 本地内置 | **在线** | 无需 | 1 | L2/L4 | — |
-| `protected-area-map` | 本地内置 | **在线** | 无需 | 1 | L2/L4 | `--endpoint` `--tk` |
-| `route-navigation` | 本地内置 | **在线** | 无需 | 2 | L2/L4 | `--router` `--tk` |
-| `sea-level-rise-map` | 本地内置 | **在线** | 无需 | 1 | L2/L4 | `--tk` |
-| `stac-browser-map` | 本地内置 | **在线** | 无需 | 1 | L2/L4 | `--endpoint` `--tk` |
-| `statistical-thematic-map` | 本地内置 | **在线** | 无需 | 1 | L2/L4 | — |
-| `tide-gauge-map` | 本地内置 | **在线** | 无需 | 1 | L2/L4 | `--tk` |
-| `typhoon-track-map` | 本地内置 | **在线** | 无需 | 1 | L2/L4 | `--tk` |
-| `weather-visualization-map` | 本地内置 | **在线** | 无需 | 1 | L2/L4 | `--tk` |
-| `china-historical-map` | 本地内置 | **在线** | 无需 | 15 | L2/L4/L5 | `--endpoint` |
-| `tianditu-geocoder` | 不涉及 | 本地/无需 | 无需 | 1 | L4 | `--tk` |
-| `tourist-attraction-map` | 本地内置 | 本地/无需 | 无需 | 1 | L4 | — |
-| `cesium-common` | 不涉及 | 本地/无需 | 无需 | 0 | L6 | `--tk` |
-| `map-poster-maker` | 本地内置 | 本地/无需 | 无需 | 0 | L6 | `--gateway` `--style` |
-| `maplibre-common` | 不涉及 | 本地/无需 | 无需 | 0 | L6 | `--tk` |
-| `self-improving-agent` | 不涉及 | 本地/无需 | 无需 | 0 | L6 | — |
-| `spatial-analysis` | 本地内置 | 本地/无需 | 无需 | 0 | L6 | — |
-| `tianditu-1m-atlas` | 本地内置 | 本地/无需 | 无需 | 0 | L6 | — |
-| `tourism-heatmap` | 本地内置 | 本地/无需 | 无需 | 0 | L6 | — |
+`tourism-heatmap` 的节假日游客数、`cobalt-mine-map` 的交易所公告和各国地质 PDF，都没有稳定接口，不要写通用爬虫。
+
+游客数已按技能 Step 2 从文旅部 / 新华 / 央视 / 品橙等综述手聚 11 个假期的 `cities.json`（全市接待，景区口径不收录），放在 `/data/dataset/gisagent/tourism-heatmap/`。最新假期仍需联网检索。钴矿空间范围用技能自带矿区，公告层保持「最新数据需联网」。
 
 ## 离线改造抓手：可覆盖参数
 
-技能自带的地址参数是离线改造成本最低的一条路，不需要改代码就能把外部端点换成内网服务。
-
-| 参数 | 支持技能数 | 含义 | 命中技能 |
-| :--- | :--- | :--- | :--- |
-| `--tk` | 33 | 传入自有地图服务密钥，替换默认公共测试密钥 | 多数出图类技能 |
-| `--router` | 4 | 用自建路由服务替换公共路由实例 | `city-isochrone-map`、`classic-hiking-route-map`、`route-navigation`、`self-driving-escape-map` |
-| `--endpoint` | 5 | 替换数据源地址 | `china-historical-map`、`cobalt-mine-map`、`flight-tracker-map`、`protected-area-map`、`stac-browser-map` |
-| `--tileserv` | 2 | 把瓦片地址注入样式，改用本地瓦片服务 | `sld-admin-boundary`、`sld-dem-terrain` |
-| `--glyphs` | 1 | 指定注记字体地址 | `china-metro-map` |
-| `--gateway` `--style` | 1 | 指定网关地址与样式来源 | `map-poster-maker` |
-
-此外还有一类环境变量形式的开关（密钥、路由服务基址、要素导出服务基址），改造时与上述参数等效。
+| 参数 | 含义 | 典型技能 |
+| :--- | :--- | :--- |
+| `--tk` / `--key` | 天地图密钥 | 多数出图技能 |
+| `--router` / `--osrm` | 自建路由 | `city-isochrone-map`、`route-navigation`、`self-driving-escape-map`、`classic-hiking-route-map` |
+| `--endpoint` | 替换数据源 | `cobalt-mine-map`、`flight-tracker-map`、`protected-area-map`、`stac-browser-map`、`china-historical-map` |
+| `--gateway` | 本地网关 | `map-poster-maker`、SLD、`stylized-3d-city-map` |
+| `--glyphs` | 注记字体 | `china-metro-map` |
+| `--overture-tiles` / `fetch-tiles` | 本地 PMTiles | `atlas-earth`、`arnis-earth`、`gaussian-earth` |
+| `--no-fetch` | 禁止联网取数 | `energy-facility-map`、`self-driving-escape-map` |
 
 ## 部署检查清单
 
-按顺序执行，每一步都先确认现象再进下一步，避免把四类断点混成一个“地图不出来”。
+1. 确认产品 `/lib/maplibre/5.24.0`、`/lib/cesium/1.122`、`/lib/fonts` 在位。页面不应再请求 unpkg 或 Google Fonts。
+2. 按现场 bbox 爬天地图，注入本地瓦片服务。底图请求应留在内网。
+3. 能自建的先自建：路由、`postgis-poi-address`、本地 Overpass。
+4. 专题包已在 `/data/dataset/gisagent`，随离线包分发时按技能目录拷入。瓦片和 Overture 仍按现场 bbox 另做。实时技能写截止时刻。
+5. 新生成页面不要照抄 `maplibre-common` / `cesium-common` 的公网天地图示例。
+6. 回归：逐个技能打开产物，确认无外部请求、有底图、有标注、有数据。
 
-1. **先验证前端库**。用浏览器开发者工具确认页面没有对公共 CDN 的请求。若有，先处理 L1，这是其他一切现象的前提。
-2. **再验证底图**。确认页面没有对外部瓦片服务的请求，底图改由本地瓦片服务或网关供片。
-3. **再验证注记字体**。确认注记字体地址指向内网网关；有中文标注需求时，字体必须本地提供。
-4. **然后处理数据链路**。能自建的先自建（路由、地址编码、行政区边界）；不能自建的预先抓取并随包发布；本质依赖实时的，在交付说明里明确数据截止时刻。
-5. **替换自有服务的公网地址**（2 个技能），改为内网地址或相对路径。
-6. **调整规范类技能的默认示例**，避免新生成页面继续引入在线底图与在线字体。
-7. **回归验证**：逐个技能打开产物，确认无外部请求、有底图、有标注、有数据。
-
-## 技能面全景：从 49 个制图技能到 67 个技能
-
-上面的 L1–L6 只覆盖 `mapviz-skills`。把范围扩到整个 `skillpacks`，分母从 49 变成 **67**：14 个技能包目录里 **13** 个含技能、**1** 个是空目录，技能按「目录内含 `SKILL.md`」计数——`mapviz-skills` 49 个，其余 12 个包 18 个（`ui-ux-pro-max` 独占 7 个）。
-
-| 面板 | 技能数 | 离线断点形态 |
-| :--- | :--- | :--- |
-| 制图产出面（`mapviz-skills`） | 49 | 四类外部资源：前端库、底图瓦片、注记字体、要素数据接口 |
-| 工具执行面与规范知识面（其余 12 个包） | 18 | 断点不在网址，而在装不上、跑不起来、产出物内嵌在线素材 |
-
-合并后的全量结论，三类互斥且闭合：
-
-| 分类 | 技能数 | 构成 |
-| :--- | :--- | :--- |
-| 需处置 | **54** | 制图面 42 + 工具/规范面 12 |
-| 只需内网容器在位 | **3** | 空间数据库操作、服务发布与切片、知识图谱渲染 |
-| 完全无外部依赖 | **10** | 制图面 7 + 工具面 3（两个技能加载自检模板、一个纯版式规范） |
-
-打个比方：制图面的 49 个技能像 49 家门店，断的是水电、布景、字体、食材；工具类技能则像后厨的一台进口设备——清单上没有任何采购网址，但设备本身要么出厂就装好了才转得起来，要么第一次开机就要联网激活。只看门店的账单，永远查不出后厨的问题。
-
-### 工具/规范面：18 个技能断在哪一环
-
-下表按「需处置 12 → 只需内网容器在位 3 → 无外部依赖 3」排序，行序即分类。
-
-| 技能 | 所属面 | 离线断点 | 离线时的表现 | 处置方向 |
-
-| `arnis-cli` | 三维体素建模 | 二进制内部联网取数 | 无要素可建，产物为空场景 | 随包内置抽取好的要素与地形副本，或改交付内置样本 |
-| `geoscan-cli` | 扫描件要素提取 | 需镜像预装识别与制图运行时 | 命令缺失即整链中断 | 镜像预装并做版本自检，只用包内自带运行时 |
-| `mapgis10-cli` | 环境/数据源配置 | 需镜像预装桌面套件，且授权是图形界面流程 | 无头容器内无法完成授权交互 | 预置授权与配置目录，不在现场做在线激活 |
-| `3dtiles-cli` | 三维瓦片生成 | 需镜像预装转换内核与可选格式依赖；同时依赖内网数据库 | 特定点云或模型格式缺依赖即被跳过 | 先自检缺失格式再预装；保证数据库容器在位 |
-| `geomoder-cli` | 三维地质建模 | 重型数值依赖不随包发布 | 首次运行需要公网包源 | 离线镜像源或预装到镜像 |
-| `ui-ux-pro-max/design` | 视觉方案生成 | 公网包源 + 模板内嵌在线字体与图片 | 依赖装不上，产出的字与图全部丢失 | 预装依赖；模板字体与图片改本地路径并内置素材 |
-| `ui-ux-pro-max/ui-styling` | 样式工程 | 公网包源（框架与插件） | 构建阶段取包失败 | 内网包源或离线包 |
-| `ui-ux-pro-max/ui-ux-pro-max` | 设计工作流入口 | 公网包源（解释器安装指引） | 指引在内网机器不可执行 | 直接用镜像内已有解释器 |
-| `ui-ux-pro-max/design-system` | 设计系统与成片 | 产出样式内嵌 23 个在线图片地址与在线字体 | 版式正确但背景图与文字全部缺失 | 内置背景图池并提供本地字体 |
-| `ui-ux-pro-max/slides` | 幻灯片模板 | 模板内嵌公共 CDN 图表库与在线背景图 | 图表不绘制、背景空白 | 图表库改本地路径、背景图内置 |
-| `ui-ux-pro-max/brand` | 品牌规范 | 模板内嵌公共字体服务 | 字形回落到浏览器默认 | 由内网字体服务供字 |
-| `cesium-common` | 三维使用规范 | 说明示例给在线底图（引导型） | 新生成页面继续继承在线瓦片与密钥依赖 | 示例改本地瓦片服务与内网密钥注入 |
-| `postgis-cli` | 空间数据库操作 | 依赖内网数据库容器 | 容器不在位则全部命令失败 | 部署即离线可用 |
-| `postgis-service-cli` | 服务发布与切片导出 | 依赖内网网关供瓦片、要素、栅格、字体、图标；前端库随包 | 网关不在位则无可用服务地址 | 部署即离线可用，注记字体天然本地化 |
-| `knowledge-cli` | 知识库问答与图谱 | 依赖内网知识服务容器；图前端库随包 | 服务不在位则问答为空、图无内容 | 部署知识服务容器 |
-| `ui-ux-pro-max/banner-design` | 横幅规格 | 无外部依赖 | 不受影响 | — |
-| `mapgis-custom-skill` | 技能加载链路自检 | 无外部依赖 | 不受影响，可当离线自检用例 | 用作离线验收探针 |
-| `hello-gis` | 技能模板自检 | 无外部依赖 | 不受影响 | 用作离线验收探针 |
-
-分类计数（同一技能可同时命中多类，故各类之和大于 18）：需镜像预装软件 **3**、需公网包源 **3**、重型依赖不随包 **1**、二进制内部联网取数 **1**、授权激活形态 **1**、产出物内嵌在线素材 **4**、依赖内网容器 **4**、引导型示例 **1**、无外部依赖 **3**。其中 `3dtiles-cli` 同时命中「需预装」与「依赖内网容器」，`ui-ux-pro-max/design` 同时命中「公网包源」与「素材内嵌」。
-
-### 为什么制图面的方法直接套到工具类会漏判
-
-按原口径不做修改地扩到全量，会得到「67 个技能、**179** 处端点引用、**113** 个唯一域名」，但相对制图面新增的 8 处端点里 **5** 处是假阳性：1 处样式的 XML 文档类型声明、2 处打包库自带的许可证头、2 处纯参考外链。把这类噪声排除、并把「说明里写明要执行的动作」计入运行行为之后，两个方向的问题同时暴露：
-
-- **漏判**：静态网址扫描把 **11** 个工具/规范技能判成不受影响，逐条核实后只有 **3** 个成立。另外 8 个里，**5** 个断点静态完全不可见（`arnis-cli`、`geoscan-cli`、`mapgis10-cli`、`3dtiles-cli`、`geomoder-cli`），占该面 12 个需处置技能的 42%；其余 3 个取决于内网容器是否在位。最典型的是 `arnis-cli`：技能文件里一个网址都没有，联网取数发生在包内可执行文件的内部逻辑中。
-- **误判方向相反**：若把说明文档中的模板代码块也算作运行态，制图面的 L6 从 **7** 降到 **3**（只剩 `map-poster-maker`、`spatial-analysis`、`tianditu-1m-atlas`），改判的 4 个分别是 2 个底图示例、1 个安装期取包、1 个数据刷新路径。这正是前文「规范类技能会引导新页面联网」的量化版本。
-
-结论是离线验收必须跑两套判据：网址静态扫描管制图产出面，文档记载的运行行为加上「包内是否自带可执行文件」管工具与规范面。
-
-### 工具/规范面的口径补充
-
-| 项目 | 口径 |
-| :--- | :--- |
-| 分母 | `skillpacks` 下含 `SKILL.md` 的目录，共 67 个；空目录不计入 |
-| 追加计入项 | 说明中写明要执行的动作：调用外部命令、拉取在线要素、安装依赖包（Agent 会照做，等同运行依赖） |
-| 追加不计入 | 否定句（如“不联网”“不添加互联网”）、厂商授权界面描述、打包库自带的许可头与文档外链 |
-| 内网容器 | 网关、知识服务、数据库容器视为本地供给，但必须在位才成立 |
-| 判定方式 | 每条结论都落到具体文件与行号，脚本可复跑；技能内容有改动时锚点校验会失败 |
+落地顺序：机器和网络按[部署方案与前提](/docs/offline-deploy-plan)打通之后，**先处理天地图底图与可预抓数据**，不要再把 L1 前端库当第一优先级。
 
 ## 边界与例外
 
-- **只出现在说明里的在线来源**：`cesium-common`、`china-historical-map`、`city-isochrone-map`、`cobalt-mine-map`、`flight-tracker-map`、`maplibre-common`、`openmeteo-contour-forecast-map`、`route-navigation`、`storymap-template`、`tourism-heatmap` 共 10 个技能，其说明中列有运行态未使用的备用来源或替代端点。它们按上表不计入受影响项，但只要用户要求“取最新数据”，仍会走到外网。
-- **实时性无法补偿**：地震、台风、临近降水、潮汐、航空器位置、海洋气象、灾害事件这类数据源本身要求联网获取，离线环境只能交付快照。
-- **本章不覆盖联网白名单方案**。如果部署环境允许部分外网访问，可以只放行必要域名以缩短改造量；这种情况下优先保留底图与注记字体的本地化，因为它们是所有产出的共同依赖。
-- **两个边界读数**。技能包目录 `geology-knowledge` 是空目录，不产生技能、不进 67 的分母；`cesium-common` 同时以顶层技能包和 `mapviz-skills` 内技能两种形态存在，全量计数按两个独立目录计入两次，跨页引用时必须带包名前缀，否则会当成同一个技能而少算一个。
+- 规范类技能运行时不访问外网，但会引导新页面去引用在线底图。
+- 实时性无法补偿：地震、台风、航班、潮位、临近雷达、气象预报、极光。
+- 本章不覆盖「只放行部分域名」的白名单方案。若现场允许有限出网，优先保留底图与字体的本地化。
+- `ui-ux-pro-max-skill` 按 7 个嵌套技能计数，不把 `cli/assets` 副本再算一遍。`mapgis10-java-skills` 的模块级 `SKILL.md` 不算独立技能。
 
 ## 复核方式
 
-本章全部数字来自对 `skillpacks/mapviz-skills` 的静态扫描，统计脚本按「判定口径」逐技能提取运行态与配置态文件中的外部地址，归一化后按角色（前端库、底图、注记字体、数据、自有服务）分类，再合成影响等级。逐技能矩阵、分级总览与关键数字由同一份扫描结果生成，因此表内每一行与汇总数字始终一致；技能目录有增删时重新执行扫描即可刷新本章全部数据。
+重跑：
 
-「技能面全景」一节由同一套扫描器的两个模式加上一个工具面判定器生成：先用与上文完全相同的口径重跑 `mapviz-skills`，逐项复现 49、42、7、171、105、11、27 与 L1–L6 六个计数、两份技能名单（复现不一致即中止，不允许直接出全量数字）；再扩到全量分母，并按工具面口径逐条给出文件与行号证据。三个汇总数（54、3、10）在生成时强制校验相加等于 67、且与两个面板的分项相加一致，任一格被手改都会导致脚本失败而不是静默出一个新数字。
+```bash
+python3 scripts/scan-skills-network-deps.py
+```
+
+脚本是静态第一遍，会把许可头和出处记录算进去，**不能直接当对外数字**。对外数字以人工复核为准，事实源是 `openspec/changes/offline-skill-network-deps-refresh/artifacts/ANALYSIS.md`。技能目录有增删时先跑脚本，再按该 change 的口径改本章名单。
